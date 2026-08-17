@@ -1,0 +1,119 @@
+# ==============================================================================
+# Byte-compiled / optimized / DLL files (Python)
+# ==============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# ==============================================================================
+# Virtual Environments
+# ==============================================================================
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# ==============================================================================
+# Environment Variables & Secrets (CRITICAL: Never commit secrets)
+# ==============================================================================
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+# Ensure template is tracked
+!.env.example
+
+# ==============================================================================
+# Redis & Local Database Dumps
+# ==============================================================================
+dump.rdb
+*.sqlite3
+*.db
+
+# ==============================================================================
+# Testing, Coverage & Linters
+# ==============================================================================
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+*.py,cover
+.tox/
+.nox/
+.hypothesis/
+.ruff_cache/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# ==============================================================================
+# Logs & Process Output
+# ==============================================================================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ==============================================================================
+# Distribution & Packaging
+# ==============================================================================
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ==============================================================================
+# IDEs & Editor Configuration
+# ==============================================================================
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+
+# ==============================================================================
+# Operating System Artifacts
+# ==============================================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+[Dd]esktop.ini
+$RECYCLE.BIN/
+
+# ==============================================================================
+# Temp & Scratch Files
+# ==============================================================================
+tmp/
+temp/
+scratch/

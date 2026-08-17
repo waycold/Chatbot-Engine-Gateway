@@ -1,0 +1,16 @@
+# Web Framework & Server
+fastapi>=0.115.0,<1.0.0
+uvicorn[standard]>=0.30.0,<1.0.0
+
+# Google GenAI Official SDK (Google AI Studio / Gemini API)
+google-genai>=1.0.0,<2.0.0
+
+# Distributed Caching & Short-Term Memory
+redis>=5.0.0,<6.0.0
+
+# Async HTTP Client for Monolith & Internal Communication
+httpx>=0.27.0,<1.0.0
+
+# Settings & Configuration Management (Pydantic v2)
+pydantic-settings>=2.4.0,<3.0.0
+python-dotenv>=1.0.1,<2.0.0
