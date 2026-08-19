@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Interfaz moderna para el Chatbot de IA y Gateway Multi-Agente con streaming en tiempo real.">
+  <title>AI Agent Gateway | Chatbot</title>
+  
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  
+  <!-- Main Stylesheet -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-container" id="app">
+    
+    <!-- Top Navigation Header -->
+    <header class="app-header" id="app-header">
+      <div class="header-left">
+        <div class="brand">
+          <div class="brand-icon">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z"/>
+              <path d="M12 6v6l4 2"/>
+              <circle cx="12" cy="12" r="3" fill="currentColor"/>
+            </svg>
+          </div>
+          <div class="brand-info">
+            <h1 class="brand-title">AI Agent Gateway</h1>
+            <span class="brand-badge" id="service-version">v0.1.0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Agent Switcher Selector -->
+      <div class="header-center">
+        <div class="agent-selector-wrapper">
+          <label for="agent-select-container" class="sr-only">Seleccionar Agente</label>
+          <div class="custom-select" id="agent-select-container">
+            <div class="select-trigger" id="agent-trigger" tabindex="0" role="combobox" aria-haspopup="listbox" aria-expanded="false">
+              <span class="agent-icon-badge" id="active-agent-icon">💼</span>
+              <div class="select-text">
+                <span class="agent-name" id="active-agent-name">Portfolio Agent</span>
+                <span class="agent-role" id="active-agent-desc">Proyectos y Servicios</span>
+              </div>
+              <svg class="chevron-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="m6 9 6 6 6-6"/>
+              </svg>
+            </div>
+            <div class="select-options" id="agent-options" role="listbox">
+              <div class="option-item active" data-agent="portfolio" role="option" aria-selected="true">
+                <span class="option-icon">💼</span>
+                <div class="option-content">
+                  <span class="option-title">Portfolio Agent</span>
+                  <span class="option-desc">Experiencia profesional, CV y proyectos</span>
+                </div>
+              </div>
+              <div class="option-item" data-agent="ecommerce" role="option" aria-selected="false">
+                <span class="option-icon">🛍️</span>
+                <div class="option-content">
+                  <span class="option-title">E-commerce Agent</span>
+                  <span class="option-desc">Catálogo de productos, cotizaciones y pedidos</span>
+                </div>
+              </div>
+              <div class="option-item" data-agent="analytics" role="option" aria-selected="false">
+                <span class="option-icon">📊</span>
+                <div class="option-content">
+                  <span class="option-title">Analytics Agent</span>
+                  <span class="option-desc">Métricas de negocio, KPIs e informes</span>
+                </div>
+              </div>
+              <div class="option-item" data-agent="general" role="option" aria-selected="false">
+                <span class="option-icon">⚡</span>
+                <div class="option-content">
+                  <span class="option-title">General Assistant</span>
+                  <span class="option-desc">Orquestador general y consultas abiertas</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Connection Status & Header Actions -->
+      <div class="header-right">
+        <!-- Live Connection Status Badge -->
+        <div class="status-badge" id="connection-status-badge" title="Estado de conexión con el backend de FastAPI">
+          <span class="status-dot status-checking" id="status-dot"></span>
+          <span class="status-label" id="status-label">Conectando...</span>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="header-actions">
+          <button type="button" class="btn-icon" id="btn-new-chat" title="Nueva Conversación" aria-label="Iniciar nueva conversación">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 5v14M5 12h14"/>
+            </svg>
+            <span class="btn-tooltip">Nuevo Chat</span>
+          </button>
+          
+          <button type="button" class="btn-icon" id="btn-export-chat" title="Exportar Conversación" aria-label="Exportar conversación">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+            </svg>
+            <span class="btn-tooltip">Exportar</span>
+          </button>
+
+          <button type="button" class="btn-icon" id="btn-open-settings" title="Configuración de Conexión" aria-label="Abrir configuración">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+            <span class="btn-tooltip">Ajustes</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Chat Workspace -->
+    <main class="chat-main">
+      <div class="chat-scroll-container" id="chat-scroll-container">
+        
+        <!-- Welcome Screen (Shown when no messages) -->
+        <section class="welcome-screen" id="welcome-screen">
+          <div class="welcome-card">
+            <div class="welcome-avatar" id="welcome-avatar">💼</div>
+            <h2 class="welcome-title" id="welcome-title">Bienvenido al Portfolio Agent</h2>
+            <p class="welcome-subtitle" id="welcome-subtitle">
+              Puedo responder preguntas sobre proyectos, tecnologías utilizadas, stack de desarrollo y casos de estudio.
+            </p>
+            
+            <div class="prompt-starters">
+              <span class="starters-label">Sugerencias rápidas:</span>
+              <div class="starters-grid" id="starters-grid">
+                <!-- Injected via JavaScript based on selected agent -->
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Messages Feed Container -->
+        <section class="messages-container" id="messages-container" aria-live="polite">
+          <!-- Chat messages rendered dynamically here -->
+        </section>
+
+        <!-- Streaming / Typing Indicator (Floating or inline) -->
+        <div class="typing-indicator-container hidden" id="typing-indicator">
+          <div class="assistant-avatar small" id="typing-avatar">💼</div>
+          <div class="typing-bubble">
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+            <span class="typing-text">Generando respuesta en tiempo real...</span>
+          </div>
+        </div>
+
+        <div id="scroll-anchor"></div>
+      </div>
+
+      <!-- Floating Scroll-To-Bottom Button -->
+      <button type="button" class="btn-scroll-bottom hidden" id="btn-scroll-bottom" aria-label="Ir al último mensaje">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 5v14M19 12l-7 7-7-7"/>
+        </svg>
+      </button>
+
+      <!-- Bottom Chat Input Bar -->
+      <footer class="chat-footer">
+        <div class="input-container">
+          <form class="chat-form" id="chat-form" onsubmit="return false;">
+            <div class="input-box-wrapper">
+              <label for="message-input" class="sr-only">Escribe tu mensaje</label>
+              <textarea
+                id="message-input"
+                name="message"
+                class="message-textarea"
+                placeholder="Escribe un mensaje para el agente... (Shift + Enter para nueva línea)"
+                rows="1"
+                maxlength="4000"
+                autocomplete="off"
+                spellcheck="true"
+              ></textarea>
+              
+              <div class="input-actions-inside">
+                <!-- Character counter -->
+                <span class="char-counter" id="char-counter">0/4000</span>
+                
+                <!-- Abort Streaming Button (Visible only during stream) -->
+                <button type="button" class="btn-abort hidden" id="btn-abort-stream" title="Detener generación" aria-label="Detener streaming">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                    <rect x="6" y="6" width="12" height="12" rx="2"/>
+                  </svg>
+                  <span class="abort-label">Detener</span>
+                </button>
+
+                <!-- Send Button -->
+                <button type="submit" class="btn-send" id="btn-send" title="Enviar mensaje (Enter)" aria-label="Enviar mensaje" disabled>
+                  <svg class="send-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="m22 2-7 20-4-9-9-4Z"/>
+                    <path d="M22 2 11 13"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </form>
+
+          <div class="footer-meta">
+            <span class="meta-item">
+              <span class="meta-icon">⚡</span>
+              <span>FastAPI SSE Stream</span>
+            </span>
+            <span class="meta-separator">•</span>
+            <span class="meta-item session-id-display" id="footer-session-id" title="Haz clic para copiar Session ID">
+              Session: <code id="session-display">sess_loading</code>
+            </span>
+            <span class="meta-separator">•</span>
+            <span class="meta-item">Enter para enviar</span>
+          </div>
+        </div>
+      </footer>
+    </main>
+
+    <!-- Settings & Configuration Modal -->
+    <div class="modal-overlay hidden" id="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-header-title">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+            <h3 id="settings-title">Configuración del Gateway</h3>
+          </div>
+          <button type="button" class="btn-close-modal" id="btn-close-settings" aria-label="Cerrar modal">&times;</button>
+        </div>
+
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="input-api-url" class="form-label">
+              <span>URL Base de FastAPI Backend</span>
+              <span class="badge-optional">Requerido</span>
+            </label>
+            <div class="input-with-button">
+              <input type="url" id="input-api-url" class="form-input" placeholder="http://localhost:8000" value="http://localhost:8000">
+              <button type="button" class="btn-secondary" id="btn-test-connection">Test Ping</button>
+            </div>
+            <span class="form-hint">Endpoints: <code>/api/v1/chat/stream</code> y <code>/health</code></span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Modo de Comunicación</label>
+            <div class="radio-group">
+              <label class="radio-option">
+                <input type="radio" name="stream_mode" value="sse" checked>
+                <div class="radio-card">
+                  <div class="radio-title">Server-Sent Events (SSE Stream)</div>
+                  <div class="radio-desc">Streaming token por token en tiempo real con menor latencia percibida.</div>
+                </div>
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="stream_mode" value="sync">
+                <div class="radio-card">
+                  <div class="radio-title">Standard POST (JSON Sync)</div>
+                  <div class="radio-desc">Espera la respuesta completa procesada antes de renderizar.</div>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">
+              <span>Identificador de Sesión (`session_id`)</span>
+            </label>
+            <div class="session-manager-row">
+              <input type="text" id="input-session-id" class="form-input" readonly>
+              <button type="button" class="btn-secondary" id="btn-copy-session" title="Copiar Session ID">Copiar</button>
+              <button type="button" class="btn-secondary" id="btn-regen-session" title="Generar Nuevo Session ID">Nuevo</button>
+            </div>
+            <span class="form-hint">Mantiene el historial de contexto en la memoria distribuida de Redis.</span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Almacenamiento Local</label>
+            <div class="danger-zone">
+              <div class="danger-info">
+                <div class="danger-title">Limpiar Historial Local</div>
+                <div class="danger-desc">Elimina los mensajes almacenados en este navegador.</div>
+              </div>
+              <button type="button" class="btn-danger" id="btn-clear-local-storage">Borrar Todo</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" id="btn-cancel-settings">Cancelar</button>
+          <button type="button" class="btn-primary" id="btn-save-settings">Guardar Cambios</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Confirm Clear Modal -->
+    <div class="modal-overlay hidden" id="confirm-modal" role="dialog" aria-modal="true">
+      <div class="modal-card modal-card-sm">
+        <div class="modal-header">
+          <h3 class="modal-header-title">¿Reiniciar Conversación?</h3>
+          <button type="button" class="btn-close-modal" id="btn-close-confirm">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-text">Esto limpiará la vista actual y generará una nueva sesión en el Gateway de IA.</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" id="btn-cancel-confirm">Cancelar</button>
+          <button type="button" class="btn-danger" id="btn-confirm-clear">Sí, Reiniciar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notifications Container -->
+    <div class="toast-container" id="toast-container" aria-live="assertive"></div>
+
+  </div>
+
+  <!-- Main Application Script -->
+  <script src="app.js"></script>
+</body>
+</html>

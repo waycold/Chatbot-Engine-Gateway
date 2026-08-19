@@ -1,0 +1,56 @@
+# ==============================================================================
+# Render Infrastructure-as-Code Blueprint
+# Project: Chatbot-Engine-Gateway (FastAPI Multi-Agent Microservice)
+# ==============================================================================
+
+services:
+  # ----------------------------------------------------------------------------
+  # FastAPI AI Agent Gateway Web Service
+  # ----------------------------------------------------------------------------
+  - type: web
+    name: ai-agent-gateway
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: oregon
+    branch: main
+    autoDeploy: true
+    healthCheckPath: /health
+
+    # Runtime Environment Variables Configuration
+    envVars:
+      # Google Gemini AI Studio API Key (Provide securely in Render Dashboard)
+      - key: GEMINI_API_KEY
+        sync: false
+
+      # Shared secret for inter-service authentication with Django Backend
+      - key: INTERNAL_API_SECRET
+        generateValue: true
+
+      # Backend Django Monolith URL
+      - key: DJANGO_BACKEND_URL
+        sync: false
+
+      # Redis Cache & Agent Memory URI
+      - key: REDIS_URL
+        sync: false
+
+      # Application Runtime Environment
+      - key: ENVIRONMENT
+        value: production
+
+      # Debug Mode Flag
+      - key: DEBUG
+        value: "false"
+
+      # Allowed CORS Origins (Comma-separated or JSON list)
+      - key: BACKEND_CORS_ORIGINS
+        sync: false
+
+      # Default Google Gemini Model
+      - key: DEFAULT_MODEL
+        value: gemini-3.7-flash
+
+      # Force unbuffered standard I/O for immediate logging
+      - key: PYTHONUNBUFFERED
+        value: "1"

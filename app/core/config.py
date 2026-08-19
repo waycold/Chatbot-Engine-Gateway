@@ -24,17 +24,50 @@ class Settings(BaseSettings):
         ...,
         description="Google AI Studio / Gemini API Key for google-genai client authentication",
     )
+    DEFAULT_MODEL: str = Field(
+        default="gemini-3.7-flash",
+        description="Default Gemini LLM model identifier for inference",
+    )
+    LLM_TIMEOUT_SECONDS: float = Field(
+        default=30.0,
+        description="Maximum timeout in seconds for LLM generation requests",
+    )
+    LLM_MAX_RETRIES: int = Field(
+        default=4,
+        description="Maximum number of retry attempts for transient LLM errors",
+    )
+    LLM_INITIAL_RETRY_DELAY: float = Field(
+        default=1.0,
+        description="Initial delay in seconds before first retry in exponential backoff",
+    )
+    LLM_BACKOFF_FACTOR: float = Field(
+        default=2.0,
+        description="Multiplier factor for exponential backoff delay",
+    )
+    LLM_MAX_RETRY_DELAY: float = Field(
+        default=8.0,
+        description="Maximum ceiling delay in seconds between retries",
+    )
+
 
     # --- Distributed Cache & Agent State Memory ---
     REDIS_URL: str = Field(
         default="redis://localhost:6379/0",
         description="Redis connection URI for agent session memory and caching",
     )
+    SESSION_TTL_SECONDS: int = Field(
+        default=86400,
+        description="TTL in seconds for storing conversation history in memory",
+    )
 
     # --- Django Monolith Integration & Security ---
     DJANGO_BACKEND_URL: str = Field(
         default="http://localhost:8000",
         description="Base URL of the transactional Django backend",
+    )
+    DJANGO_API_TIMEOUT_SECONDS: float = Field(
+        default=10.0,
+        description="Timeout in seconds for internal Django HTTP API calls",
     )
     INTERNAL_API_SECRET: str = Field(
         ...,

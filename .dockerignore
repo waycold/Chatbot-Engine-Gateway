@@ -1,0 +1,59 @@
+# ==============================================================================
+# Docker Build Ignore Rules
+# ==============================================================================
+
+# Version Control & CI/CD
+.git/
+.gitignore
+.github/
+
+# Python Bytecode & Cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+
+# Environment Variables & Local Secrets
+.env
+.env.*
+!.env.example
+
+# Testing & Coverage Artifacts
+tests/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.tox/
+.nox/
+.hypothesis/
+.ruff_cache/
+.mypy_cache/
+
+# Documentation & Design Assets
+docs/
+*.md
+!README.md
+frontend/
+
+# Local Logs & Temporary Files
+logs/
+*.log
+tmp/
+temp/
+scratch/
+
+# IDEs & OS Files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db

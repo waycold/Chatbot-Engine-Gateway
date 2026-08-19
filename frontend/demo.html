@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Host Portal Demo | Drop-in AI Chat Widget</title>
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --host-bg: #f8fafc;
+      --host-card: #ffffff;
+      --host-border: #e2e8f0;
+      --host-text: #0f172a;
+      --host-text-muted: #64748b;
+      --host-primary: #2563eb;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--host-bg);
+      color: var(--host-text);
+      line-height: 1.6;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+    }
+
+    header {
+      margin-bottom: 32px;
+      border-bottom: 1px solid var(--host-border);
+      padding-bottom: 20px;
+    }
+
+    h1 {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: #1e293b;
+      margin-bottom: 8px;
+    }
+
+    .badge {
+      display: inline-block;
+      background-color: #dbeafe;
+      color: #1e40af;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 9999px;
+      margin-bottom: 12px;
+    }
+
+    p.lead {
+      font-size: 16px;
+      color: var(--host-text-muted);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 24px;
+      margin-top: 24px;
+    }
+
+    .card {
+      background-color: var(--host-card);
+      border: 1px solid var(--host-border);
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+
+    h2 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+
+    pre {
+      background-color: #0f172a;
+      color: #f8fafc;
+      padding: 14px;
+      border-radius: 8px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      overflow-x: auto;
+      margin: 12px 0;
+    }
+
+    .btn-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    button.api-btn {
+      background-color: var(--host-primary);
+      color: #ffffff;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 14px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color 0.15s;
+    }
+
+    button.api-btn:hover {
+      background-color: #1d4ed8;
+    }
+
+    button.api-btn.secondary {
+      background-color: #e2e8f0;
+      color: #1e293b;
+    }
+
+    button.api-btn.secondary:hover {
+      background-color: #cbd5e1;
+    }
+
+    @media (max-width: 768px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <span class="badge">Portal Demo / Monolito Django Host Simulation</span>
+      <h1>Prueba de Integración: Drop-in Chat Widget</h1>
+      <p class="lead">Esta página simula un sitio anfitrión (por ejemplo Django templates, Shopify, o portal externo) consumiendo el widget autónomo con Shadow DOM sin colisión de estilos.</p>
+    </header>
+
+    <div class="grid">
+      <main class="card">
+        <h2>Instrucciones de Integración Drop-in</h2>
+        <p>Para incrustar este asistente en cualquier template de Django o sitio web, basta con agregar una única etiqueta de script antes de <code>&lt;/body&gt;</code>:</p>
+
+        <pre><code>&lt;!-- 1. Drop-in Script Tag --&gt;
+&lt;script 
+  src="/static/chat-widget.js" 
+  data-api-url="http://localhost:8000"
+  data-agent="portfolio"
+&gt;&lt;/script&gt;</code></pre>
+
+        <h2 style="margin-top: 24px;">Control Programático (JavaScript API)</h2>
+        <p>El widget expone métodos globales en <code>window.AiChatWidget</code> para que el sitio anfitrión pueda interactuar con el chat:</p>
+
+        <div class="btn-group">
+          <button class="api-btn" onclick="window.AiChatWidget.open()">Abrir Widget</button>
+          <button class="api-btn secondary" onclick="window.AiChatWidget.close()">Cerrar Widget</button>
+          <button class="api-btn secondary" onclick="window.AiChatWidget.setAgent('portfolio')">💼 Portfolio</button>
+          <button class="api-btn secondary" onclick="window.AiChatWidget.setAgent('ecommerce')">🛍️ Ecommerce</button>
+          <button class="api-btn secondary" onclick="window.AiChatWidget.setAgent('analytics')">📊 Analytics</button>
+          <button class="api-btn secondary" onclick="window.AiChatWidget.setAgent('general')">⚡ General</button>
+          <button class="api-btn" onclick="window.AiChatWidget.sendMessage('Hola, ¿podrías darme un resumen de tus capacidades?')">Enviar Pregunta Demo</button>
+        </div>
+      </main>
+
+      <aside class="card">
+        <h2>Características Verificadas</h2>
+        <ul style="margin-left: 20px; color: var(--host-text-muted); font-size: 14px;">
+          <li><strong>Zero-Dependencies:</strong> Sin React, jQuery ni librerías externas.</li>
+          <li><strong>Shadow DOM Encapsulation:</strong> Cero fuga de estilos CSS.</li>
+          <li><strong>SSE Streaming:</strong> Renderizado token a token en tiempo real.</li>
+          <li><strong>Multi-Agent:</strong> Selector rápido de agentes especializados.</li>
+          <li><strong>Persistencia:</strong> Memoria de sesión vía <code>sessionStorage</code>.</li>
+        </ul>
+
+        <div style="margin-top: 20px; padding: 12px; background: #f1f5f9; border-radius: 8px; font-size: 13px;">
+          <strong>Vista Completa:</strong> Puedes acceder a la aplicación completa en <a href="index.html" style="color: var(--host-primary);">index.html</a>.
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- Embed Drop-in AI Chat Widget -->
+  <script src="chat-widget.js" data-api-url="http://localhost:8000" data-agent="portfolio"></script>
+
+</body>
+</html>

@@ -1,0 +1,59 @@
+name: Render Keep-Alive & Health Ping
+
+on:
+  schedule:
+    # Run every 10 minutes to stay well below Render's 15-minute inactivity spin-down threshold
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+    inputs:
+      gateway_url:
+        description: 'Target Base URL for Keep-Alive Ping (e.g., https://ai-agent-gateway.onrender.com)'
+        required: false
+        default: ''
+      endpoint:
+        description: 'Target Health/Ping Endpoint'
+        required: false
+        default: '/health'
+
+concurrency:
+  group: render-keep-alive
+  cancel-in-progress: false
+
+jobs:
+  keep-alive-ping:
+    name: Ping Gateway Health
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout Codebase
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Execute Keep-Alive Ping
+        id: ping
+        env:
+          DEFAULT_URL: ${{ secrets.GATEWAY_URL || vars.GATEWAY_URL || 'https://ai-agent-gateway.onrender.com' }}
+          INPUT_URL: ${{ github.event.inputs.gateway_url }}
+          ENDPOINT: ${{ github.event.inputs.endpoint || '/health' }}
+        run: |
+          TARGET_URL="${INPUT_URL:-$DEFAULT_URL}"
+          echo "Sending Keep-Alive ping to: $TARGET_URL$ENDPOINT"
+          python scripts/keep_alive.py \
+            --url "$TARGET_URL" \
+            --endpoint "$ENDPOINT" \
+            --timeout 15 \
+            --retries 3 \
+            --backoff 2.0
+
+      - name: Publish Health Summary to GitHub Step Summary
+        if: always()
+        run: |
+          echo "### 🌐 Render Keep-Alive Ping Report" >> $GITHUB_STEP_SUMMARY
+          echo "- **Timestamp**: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ${{ steps.ping.outcome == 'success' && '✅ Online / Active' || '❌ Ping Failed' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Trigger**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
