@@ -99,7 +99,14 @@ class LLMClientService:
     def _get_candidate_models(self, primary_model: Optional[str] = None) -> list[str]:
         """Returns ordered list of candidate Gemini models for graceful fallback."""
         target = primary_model or self.default_model
-        fallback_order = [target, "gemini-3.7-flash", "gemini-3.6-flash", "gemini-2.0-flash"]
+        fallback_order = [
+            target,
+            "gemini-3.7-flash",
+            "gemini-3.6-flash",
+            "gemini-3.5-flash",
+            "gemini-3.5-flash-lite",
+            "gemini-flash-latest",
+        ]
         # Deduplicate while preserving order
         seen = set()
         candidates: list[str] = []
