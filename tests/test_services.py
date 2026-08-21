@@ -133,8 +133,7 @@ class TestLLMClientService:
         models = service._get_candidate_models("gemini-custom")
         assert models[0] == "gemini-custom"
         assert "gemini-3.7-flash" in models
-        assert "gemini-3.6-flash" in models
-        assert "gemini-3.5-flash" in models
+        assert "gemini-3.5-flash-lite" in models
 
     def test_llm_client_fallback_distinguishes_missing_key_vs_configured_key(self) -> None:
         """Verifies that fallback message does not falsely claim unconfigured key when key is set."""

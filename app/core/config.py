@@ -29,15 +29,15 @@ class Settings(BaseSettings):
         description="Default Gemini LLM model identifier for inference",
     )
     LLM_TIMEOUT_SECONDS: float = Field(
-        default=30.0,
+        default=10.0,
         description="Maximum timeout in seconds for LLM generation requests",
     )
     LLM_MAX_RETRIES: int = Field(
-        default=4,
+        default=2,
         description="Maximum number of retry attempts for transient LLM errors",
     )
     LLM_INITIAL_RETRY_DELAY: float = Field(
-        default=1.0,
+        default=0.5,
         description="Initial delay in seconds before first retry in exponential backoff",
     )
     LLM_BACKOFF_FACTOR: float = Field(
@@ -45,7 +45,7 @@ class Settings(BaseSettings):
         description="Multiplier factor for exponential backoff delay",
     )
     LLM_MAX_RETRY_DELAY: float = Field(
-        default=8.0,
+        default=2.0,
         description="Maximum ceiling delay in seconds between retries",
     )
 

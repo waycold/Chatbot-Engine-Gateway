@@ -102,10 +102,7 @@ class LLMClientService:
         fallback_order = [
             target,
             "gemini-3.7-flash",
-            "gemini-3.6-flash",
-            "gemini-3.5-flash",
             "gemini-3.5-flash-lite",
-            "gemini-flash-latest",
         ]
         # Deduplicate while preserving order
         seen = set()
@@ -158,6 +155,10 @@ class LLMClientService:
             config_kwargs: dict[str, Any] = {
                 "temperature": temperature,
             }
+            if hasattr(types, "ThinkingConfig"):
+                config_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
+            elif hasattr(types, "GenerateContentConfig"):
+                config_kwargs["thinking_config"] = {"thinking_budget": 0}
             if system_instruction:
                 config_kwargs["system_instruction"] = system_instruction
             if max_output_tokens:
