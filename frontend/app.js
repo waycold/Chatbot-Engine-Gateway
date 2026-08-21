@@ -1,14 +1,16 @@
 /**
- * AI Agent Gateway - Full Application Controller
+ * AI Agent Gateway - Full Application Controller (Enhanced with Analytics Corporativo & Live Metrics)
  * ============================================================================
  * Vanilla ES6+ Asynchronous Single Page Application
  * Features:
+ *   - Dedicated Navigation Tabs for Specialized Chats & Analytics Corporativo
  *   - Real-time Server-Sent Events (SSE) / ReadableStream token-by-token rendering
- *   - Zero-dependency custom Markdown & Code parser with copy tools
+ *   - Live Performance Metrics Bar: Latency (ms), Tokens count, Speed (tok/s), Model & SSE Status
+ *   - Corporate Analytics Quick Action Chips & KPI table rendering with smooth scroll
+ *   - Zero-dependency custom Markdown & Code parser with table/code copy tools
  *   - Multi-agent orchestration (Portfolio, E-commerce, Analytics, General)
  *   - Session persistence & conversation management
  *   - Health monitoring & live connection status
- *   - Toast notifications & chat export (JSON / Markdown)
  * ============================================================================
  */
 
@@ -51,15 +53,15 @@
       id: 'analytics',
       name: 'Analytics Agent',
       icon: '📊',
-      role: 'Métricas e Informes',
-      desc: 'Métricas de negocio, KPIs, rendimiento de modelos y análisis',
-      welcome: 'Bienvenido al Analytics Agent',
-      welcomeSubtitle: 'Especialista en análisis de métricas, rendimiento de inferencia LLM, consumo de tokens y KPIs de negocio.',
+      role: 'Analytics Corporativo & KPIs',
+      desc: 'Métricas corporativas, rendimiento de negocio, KPIs de conversión y análisis financiero',
+      welcome: 'Panel de Analytics Corporativo & Métricas',
+      welcomeSubtitle: 'Asistente analítico corporativo especializado en métricas ejecutivas, rendimiento de inferencia LLM, consumo de tokens, embudos y KPIs de negocio.',
       starters: [
-        'Genera un reporte de métricas de rendimiento y latencia',
-        '¿Cómo optimizar el consumo de tokens y caché en Redis?',
-        'Métricas de conversión y engagement de los agentes',
-        'Explica el flujo de observabilidad y logging estructurado'
+        'Genera un resumen ejecutivo de ventas y facturación trimestral en formato tabla',
+        'Muestra el desglose de tráfico web, DAU, MAU y duración promedio en una tabla de KPIs',
+        'Analiza el embudo de conversión (Visitas -> Registro -> Carrito -> Compra)',
+        'Muestra un informe de latencia de API (p50, p95, p99) y consumo de tokens'
       ]
     },
     general: {
@@ -72,14 +74,14 @@
       welcomeSubtitle: 'Orquestador inteligente con acceso a herramientas y respuestas abiertas para cualquier consulta.',
       starters: [
         '¿Qué agentes están disponibles y qué capacidades tienen?',
-        '¿Cómo funciona la memoria de conversación distribuida?',
+        '¿Cómo funciona la memoria de conversación distribuida con Redis?',
         'Ayúdame a redactar la documentación técnica del gateway',
         '¿Cómo integrar el widget drop-in en una aplicación web?'
       ]
     }
   };
 
-  // --- 2. Markdown & Code Parser Engine (Zero Dependencies) ---
+  // --- 2. Enhanced Markdown & Code Parser Engine (Zero Dependencies) ---
   class MarkdownEngine {
     static escapeHtml(str) {
       if (typeof str !== 'string') return '';
@@ -136,30 +138,79 @@
       // 8. Horizontal rules
       text = text.replace(/^---$/gim, '<hr>');
 
-      // 9. Markdown Tables
+      // 9. Enhanced Markdown Tables with Smooth Scroll & KPI Badge Highlighting
       text = text.replace(/((?:\|[^\n]+\|\r?\n)+)/g, (tableMatch) => {
         const lines = tableMatch.trim().split('\n').filter(l => l.trim().length > 0);
         if (lines.length < 2) return tableMatch;
 
-        let tableHtml = '<div class="table-wrapper"><table>';
-        let isHead = true;
+        // Parse alignments
+        let alignments = [];
+        let cleanLines = [];
 
-        lines.forEach((line, idx) => {
-          if (line.includes('---')) return; // delimiter line
+        lines.forEach(line => {
+          if (line.includes('---')) {
+            const alignCells = line.split('|').map(c => c.trim()).filter((c, i, arr) => i > 0 && i < arr.length - 1);
+            alignments = alignCells.map(c => {
+              if (c.startsWith(':') && c.endsWith(':')) return 'center';
+              if (c.endsWith(':')) return 'right';
+              return 'left';
+            });
+          } else {
+            cleanLines.push(line);
+          }
+        });
+
+        if (cleanLines.length === 0) return tableMatch;
+
+        let rawTableText = this.escapeHtml(tableMatch.trim());
+        let tableHtml = `
+          <div class="table-wrapper">
+            <div class="table-toolbar">
+              <span class="table-tag">📊 Datos / Métricas</span>
+              <button type="button" class="btn-copy-table" data-raw-table="${rawTableText}">
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+                <span>Copiar Tabla</span>
+              </button>
+            </div>
+            <div class="table-scroll-container">
+              <table>
+        `;
+
+        cleanLines.forEach((line, idx) => {
           const cells = line.split('|').map(c => c.trim()).filter((c, i, arr) => i > 0 && i < arr.length - 1);
           
           if (idx === 0) {
             tableHtml += '<thead><tr>';
-            cells.forEach(cell => { tableHtml += `<th>${cell}</th>`; });
+            cells.forEach((cell, cIdx) => {
+              const align = alignments[cIdx] || 'left';
+              tableHtml += `<th style="text-align: ${align};">${cell}</th>`;
+            });
             tableHtml += '</tr></thead><tbody>';
           } else {
             tableHtml += '<tr>';
-            cells.forEach(cell => { tableHtml += `<td>${cell}</td>`; });
+            cells.forEach((cell, cIdx) => {
+              const align = alignments[cIdx] || (/^[\$€£]?\s*[\d,.]+%?$/.test(cell) ? 'right' : 'left');
+              
+              // Detect KPI Positive / Negative percentages
+              let formattedCell = cell;
+              if (/^\+[\d,.]+%/.test(cell) || /^(Superado|Excelente|Alto|Positivo)/i.test(cell)) {
+                formattedCell = `<span class="kpi-badge kpi-badge-up">▲ ${cell}</span>`;
+              } else if (/^\-[\d,.]+%/.test(cell) || /^(Bajo|Negativo|Crítico|Alerta)/i.test(cell)) {
+                formattedCell = `<span class="kpi-badge kpi-badge-down">▼ ${cell}</span>`;
+              } else if (/\b(OK|Estable|Normal|Meta)\b/i.test(cell)) {
+                formattedCell = `<span class="kpi-badge kpi-badge-neutral">● ${cell}</span>`;
+              }
+
+              tableHtml += `<td style="text-align: ${align};">${formattedCell}</td>`;
+            });
             tableHtml += '</tr>';
           }
         });
 
-        tableHtml += '</tbody></table></div>';
+        tableHtml += '</tbody></table></div></div>';
         return tableHtml;
       });
 
@@ -225,12 +276,20 @@
       this.activeAgent = localStorage.getItem('ai_gateway_active_agent') || 'portfolio';
       this.sessionId = this._initSessionId();
       
-      // Runtime State
+      // Runtime State & Metrics
       this.messages = [];
       this.isStreaming = false;
       this.isConnected = false;
       this.abortController = null;
       this._healthCheckTimer = null;
+      this.currentModel = 'gemini-2.0-flash';
+
+      // Performance Metrics Tracking
+      this.metrics = {
+        latencyMs: 0,
+        tokensCount: 0,
+        speedTokensPerSec: 0
+      };
 
       // DOM Elements Cache
       this._cacheDom();
@@ -263,7 +322,8 @@
     _cacheDom() {
       this.dom = {
         app: document.getElementById('app'),
-        // Header
+        // Header & Navigation Tabs
+        navTabs: document.getElementById('nav-tabs'),
         agentSelectContainer: document.getElementById('agent-select-container'),
         agentTrigger: document.getElementById('agent-trigger'),
         activeAgentIcon: document.getElementById('active-agent-icon'),
@@ -276,6 +336,20 @@
         btnNewChat: document.getElementById('btn-new-chat'),
         btnExportChat: document.getElementById('btn-export-chat'),
         btnOpenSettings: document.getElementById('btn-open-settings'),
+
+        // Live Metrics Toolbar
+        metricsBar: document.getElementById('metrics-bar'),
+        metricLatency: document.getElementById('metric-latency'),
+        metricTokens: document.getElementById('metric-tokens'),
+        metricSpeed: document.getElementById('metric-speed'),
+        metricModel: document.getElementById('metric-model'),
+        metricSseStatus: document.getElementById('metric-sse-status'),
+        ssePulseDot: document.getElementById('sse-pulse-dot'),
+        btnQuickReset: document.getElementById('btn-quick-reset'),
+
+        // Analytics Quick Actions Strip
+        analyticsQuickStrip: document.getElementById('analytics-quick-strip'),
+        quickAnalyticsChips: document.getElementById('quick-analytics-chips'),
         
         // Chat Area
         chatScrollContainer: document.getElementById('chat-scroll-container'),
@@ -327,6 +401,7 @@
     _init() {
       this._updateAgentUI();
       this._updateSessionUI();
+      this._updateMetricsUI();
       this._loadStoredMessages();
       this._bindEvents();
       this._checkHealth();
@@ -334,7 +409,7 @@
       // Check health every 30 seconds
       this._healthCheckTimer = setInterval(() => this._checkHealth(), 30000);
       
-      // Also ping on window focus
+      // Ping on window focus
       window.addEventListener('focus', () => this._checkHealth());
     }
 
@@ -342,33 +417,74 @@
     _bindEvents() {
       const { dom } = this;
 
-      // 1. Agent Select Dropdown Toggle
-      dom.agentTrigger.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const isOpen = dom.agentSelectContainer.classList.toggle('open');
-        dom.agentTrigger.setAttribute('aria-expanded', isOpen);
-      });
+      // 1. Navbar Tabs Click
+      if (dom.navTabs) {
+        dom.navTabs.addEventListener('click', (e) => {
+          const tab = e.target.closest('.nav-tab');
+          if (tab) {
+            const agentId = tab.dataset.agent;
+            if (agentId && agentId !== this.activeAgent) {
+              this.setAgent(agentId);
+            }
+          }
+        });
+      }
 
-      // Close dropdown when clicking outside
-      document.addEventListener('click', (e) => {
-        if (!dom.agentSelectContainer.contains(e.target)) {
-          dom.agentSelectContainer.classList.remove('open');
-          dom.agentTrigger.setAttribute('aria-expanded', 'false');
-        }
-      });
+      // 2. Mobile Dropdown Selector Toggle
+      if (dom.agentTrigger) {
+        dom.agentTrigger.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const isOpen = dom.agentSelectContainer.classList.toggle('open');
+          dom.agentTrigger.setAttribute('aria-expanded', isOpen);
+        });
 
-      // Agent Option Click
-      dom.agentOptions.addEventListener('click', (e) => {
-        const option = e.target.closest('.option-item');
-        if (option) {
-          const selectedAgent = option.dataset.agent;
-          this.setAgent(selectedAgent);
-          dom.agentSelectContainer.classList.remove('open');
-          dom.agentTrigger.setAttribute('aria-expanded', 'false');
-        }
-      });
+        document.addEventListener('click', (e) => {
+          if (dom.agentSelectContainer && !dom.agentSelectContainer.contains(e.target)) {
+            dom.agentSelectContainer.classList.remove('open');
+            dom.agentTrigger.setAttribute('aria-expanded', 'false');
+          }
+        });
 
-      // 2. Input Handling & Auto-resize
+        dom.agentOptions.addEventListener('click', (e) => {
+          const option = e.target.closest('.option-item');
+          if (option) {
+            const selectedAgent = option.dataset.agent;
+            this.setAgent(selectedAgent);
+            dom.agentSelectContainer.classList.remove('open');
+            dom.agentTrigger.setAttribute('aria-expanded', 'false');
+          }
+        });
+      }
+
+      // 3. Analytics Quick Action Chips Click
+      if (dom.quickAnalyticsChips) {
+        dom.quickAnalyticsChips.addEventListener('click', (e) => {
+          const pill = e.target.closest('.analytics-pill');
+          if (pill) {
+            const promptText = pill.dataset.prompt;
+            if (promptText) {
+              // Ensure we are on analytics agent
+              if (this.activeAgent !== 'analytics') {
+                this.setAgent('analytics');
+              }
+              dom.messageInput.value = promptText;
+              this._autoResizeInput();
+              dom.btnSend.disabled = false;
+              this.handleSendMessage();
+            }
+          }
+        });
+      }
+
+      // 4. Quick Reset Button in Metrics Bar
+      if (dom.btnQuickReset) {
+        dom.btnQuickReset.addEventListener('click', () => {
+          this.clearConversation();
+          this.showToast('Conversación reiniciada y nueva sesión generada', 'success');
+        });
+      }
+
+      // 5. Input Handling & Auto-resize
       dom.messageInput.addEventListener('input', () => {
         this._autoResizeInput();
         const length = dom.messageInput.value.length;
@@ -385,13 +501,13 @@
         }
       });
 
-      // 3. Form Submit
+      // 6. Form Submit
       dom.chatForm.addEventListener('submit', (e) => {
         e.preventDefault();
         this.handleSendMessage();
       });
 
-      // 4. Abort Streaming Button
+      // 7. Abort Streaming Button
       dom.btnAbortStream.addEventListener('click', () => {
         if (this.abortController) {
           this.abortController.abort();
@@ -399,7 +515,7 @@
         }
       });
 
-      // 5. Scroll container & Floating Scroll-To-Bottom
+      // 8. Scroll container & Floating Scroll-To-Bottom
       dom.chatScrollContainer.addEventListener('scroll', () => {
         const threshold = 150;
         const isNearBottom = dom.chatScrollContainer.scrollHeight - dom.chatScrollContainer.scrollTop - dom.chatScrollContainer.clientHeight < threshold;
@@ -414,7 +530,7 @@
         this.scrollToBottom(true);
       });
 
-      // 6. Prompt Starters / Suggestion Chips Click
+      // 9. Prompt Starters Click
       dom.startersGrid.addEventListener('click', (e) => {
         const chip = e.target.closest('.starter-chip');
         if (chip) {
@@ -428,9 +544,24 @@
         }
       });
 
-      // 7. Message Body Delegated Actions (Copy code, Copy message, Retry)
+      // 10. Message Body Delegated Actions (Copy code, Copy table, Copy message, Retry)
       dom.messagesContainer.addEventListener('click', (e) => {
-        // Copy code button
+        // Copy Table Button
+        const copyTableBtn = e.target.closest('.btn-copy-table');
+        if (copyTableBtn) {
+          const rawTable = copyTableBtn.dataset.rawTable;
+          if (rawTable) {
+            navigator.clipboard.writeText(rawTable).then(() => {
+              const prevHtml = copyTableBtn.innerHTML;
+              copyTableBtn.innerHTML = `✓ <span>¡Tabla Copiada!</span>`;
+              setTimeout(() => copyTableBtn.innerHTML = prevHtml, 2000);
+              this.showToast('Tabla copiada al portapapeles en formato Markdown', 'success');
+            });
+          }
+          return;
+        }
+
+        // Copy Code Button
         const copyCodeBtn = e.target.closest('.btn-copy-code');
         if (copyCodeBtn) {
           const codeText = copyCodeBtn.dataset.rawCode;
@@ -448,7 +579,7 @@
           return;
         }
 
-        // Copy message button
+        // Copy Message Button
         const copyMsgBtn = e.target.closest('.btn-copy-message');
         if (copyMsgBtn) {
           const msgId = copyMsgBtn.dataset.msgId;
@@ -474,7 +605,7 @@
         }
       });
 
-      // 8. Header Action Modals
+      // 11. Header Action Modals
       dom.btnNewChat.addEventListener('click', () => {
         dom.confirmModal.classList.remove('hidden');
       });
@@ -555,6 +686,25 @@
       }
     }
 
+    _updateMetricsUI() {
+      const { dom, metrics } = this;
+      if (dom.metricLatency) {
+        dom.metricLatency.textContent = metrics.latencyMs > 0 ? `${metrics.latencyMs} ms` : '-- ms';
+      }
+      if (dom.metricTokens) {
+        dom.metricTokens.textContent = metrics.tokensCount > 0 ? `${metrics.tokensCount}` : '--';
+      }
+      if (dom.metricSpeed) {
+        dom.metricSpeed.textContent = metrics.speedTokensPerSec > 0 ? `${metrics.speedTokensPerSec.toFixed(1)} tok/s` : '-- tok/s';
+      }
+      if (dom.metricModel) {
+        dom.metricModel.textContent = this.currentModel;
+      }
+      if (dom.metricSseStatus) {
+        dom.metricSseStatus.textContent = this.isStreaming ? 'Transmitiendo...' : (this.isConnected ? 'En vivo' : 'Conectado');
+      }
+    }
+
     setAgent(agentId) {
       if (!AGENT_CATALOG[agentId]) return;
       this.activeAgent = agentId;
@@ -566,22 +716,35 @@
         this._renderWelcomeScreen();
       }
 
-      this.showToast(`Agente activo: ${AGENT_CATALOG[agentId].name}`, 'info');
+      this.showToast(`Pestaña activa: ${AGENT_CATALOG[agentId].name}`, 'info');
     }
 
     _updateAgentUI() {
       const agent = AGENT_CATALOG[this.activeAgent] || AGENT_CATALOG.portfolio;
-      this.dom.activeAgentIcon.textContent = agent.icon;
-      this.dom.activeAgentName.textContent = agent.name;
-      this.dom.activeAgentDesc.textContent = agent.role;
-      this.dom.typingAvatar.textContent = agent.icon;
+      
+      // Update Top Nav Tabs active state
+      if (this.dom.navTabs) {
+        this.dom.navTabs.querySelectorAll('.nav-tab').forEach(tab => {
+          const isMatch = tab.dataset.agent === this.activeAgent;
+          tab.classList.toggle('active', isMatch);
+          tab.setAttribute('aria-selected', isMatch ? 'true' : 'false');
+        });
+      }
 
-      // Update options active state in dropdown
-      this.dom.agentOptions.querySelectorAll('.option-item').forEach(opt => {
-        const isMatch = opt.dataset.agent === this.activeAgent;
-        opt.classList.toggle('active', isMatch);
-        opt.setAttribute('aria-selected', isMatch ? 'true' : 'false');
-      });
+      // Update mobile select display
+      if (this.dom.activeAgentIcon) this.dom.activeAgentIcon.textContent = agent.icon;
+      if (this.dom.activeAgentName) this.dom.activeAgentName.textContent = agent.name;
+      if (this.dom.activeAgentDesc) this.dom.activeAgentDesc.textContent = agent.role;
+      if (this.dom.typingAvatar) this.dom.typingAvatar.textContent = agent.icon;
+
+      // Update dropdown options
+      if (this.dom.agentOptions) {
+        this.dom.agentOptions.querySelectorAll('.option-item').forEach(opt => {
+          const isMatch = opt.dataset.agent === this.activeAgent;
+          opt.classList.toggle('active', isMatch);
+          opt.setAttribute('aria-selected', isMatch ? 'true' : 'false');
+        });
+      }
 
       this._renderWelcomeScreen();
     }
@@ -715,6 +878,7 @@
           statusDot.className = 'status-dot status-online';
           statusLabel.textContent = 'Online';
           this.dom.statusBadge.title = `Conectado a ${data.app_name || 'AI Gateway'} (v${data.version || '0.1.0'}) [${data.environment || 'dev'}]`;
+          this._updateMetricsUI();
         } else {
           throw new Error(`HTTP ${response.status}`);
         }
@@ -723,6 +887,7 @@
         statusDot.className = 'status-dot status-offline';
         statusLabel.textContent = 'Offline';
         this.dom.statusBadge.title = `Sin conexión con ${this.apiBaseUrl}. Asegúrate de iniciar FastAPI en localhost:8000`;
+        this._updateMetricsUI();
       }
     }
 
@@ -823,7 +988,7 @@
       const toolbar = row.querySelector(`#toolbar-${assistantMsg.id}`);
       const stats = row.querySelector(`#stats-${assistantMsg.id}`);
 
-      // 5. Update streaming state
+      // 5. Update streaming state & Live Metrics Tracking
       this.isStreaming = true;
       this.dom.btnAbortStream.classList.remove('hidden');
       this.dom.typingIndicator.classList.remove('hidden');
@@ -836,8 +1001,14 @@
         stream: this.streamMode === 'sse'
       };
 
-      const startTime = performance.now();
+      const requestStartTime = performance.now();
+      let firstTokenTime = null;
       let tokenCount = 0;
+
+      this.metrics.latencyMs = 0;
+      this.metrics.tokensCount = 0;
+      this.metrics.speedTokensPerSec = 0;
+      this._updateMetricsUI();
 
       try {
         const endpoint = this.streamMode === 'sse' 
@@ -855,7 +1026,7 @@
           mode: 'cors'
         });
 
-        // Hide typing indicator wave once first packet arrives
+        // Hide typing indicator wave once response starts
         this.dom.typingIndicator.classList.add('hidden');
 
         if (!response.ok) {
@@ -876,13 +1047,18 @@
             const { done, value } = await reader.read();
             if (done) break;
 
+            if (firstTokenTime === null) {
+              firstTokenTime = performance.now();
+              this.metrics.latencyMs = Math.round(firstTokenTime - requestStartTime);
+            }
+
             buffer += decoder.decode(value, { stream: true });
             const lines = buffer.split('\n');
             buffer = lines.pop(); // save incomplete trailing line
 
             for (const line of lines) {
               const trimmed = line.trim();
-              if (!trimmed || trimmed.startsWith(':')) continue; // Skip SSE comments/keepalives
+              if (!trimmed || trimmed.startsWith(':')) continue; // Skip SSE comments
 
               if (trimmed.startsWith('data:')) {
                 const rawData = trimmed.slice(5).trim();
@@ -903,6 +1079,14 @@
                 tokenCount++;
               }
 
+              // Update Live Metrics
+              const elapsedSec = (performance.now() - (firstTokenTime || requestStartTime)) / 1000;
+              this.metrics.tokensCount = tokenCount;
+              if (elapsedSec > 0) {
+                this.metrics.speedTokensPerSec = tokenCount / elapsedSec;
+              }
+              this._updateMetricsUI();
+
               assistantMsg.content = accumulatedText;
               bubble.innerHTML = MarkdownEngine.render(accumulatedText) + '<span class="streaming-cursor"></span>';
               this.scrollToBottom();
@@ -920,9 +1104,17 @@
           assistantMsg.content = replyText;
           assistantMsg.metadata = data.metadata || {};
           bubble.innerHTML = MarkdownEngine.render(replyText);
+          
+          this.metrics.latencyMs = Math.round(performance.now() - requestStartTime);
+          tokenCount = replyText.split(/\s+/).length;
+          this.metrics.tokensCount = tokenCount;
         }
 
-        const totalLatency = Math.round(performance.now() - startTime);
+        const totalLatency = Math.round(performance.now() - requestStartTime);
+        this.metrics.latencyMs = this.metrics.latencyMs || totalLatency;
+        this.metrics.tokensCount = tokenCount;
+        this._updateMetricsUI();
+
         assistantMsg.metadata.latency_ms = totalLatency;
         if (tokenCount > 0) assistantMsg.metadata.tokens_used = tokenCount;
 
@@ -942,7 +1134,6 @@
           assistantMsg.content = errorMsg;
           bubble.innerHTML = MarkdownEngine.render(errorMsg);
 
-          // Add a retry button in the bubble
           const retryContainer = document.createElement('div');
           retryContainer.style.marginTop = '10px';
           retryContainer.innerHTML = `
@@ -959,6 +1150,7 @@
         this.dom.btnAbortStream.classList.add('hidden');
         this.dom.btnSend.disabled = !this.dom.messageInput.value.trim();
         this._saveStoredMessages();
+        this._updateMetricsUI();
         this.scrollToBottom();
       }
     }
@@ -969,6 +1161,8 @@
       this._generateNewSessionId();
       this._renderMessageFeed();
       this._saveStoredMessages();
+      this.metrics = { latencyMs: 0, tokensCount: 0, speedTokensPerSec: 0 };
+      this._updateMetricsUI();
     }
 
     exportConversation() {

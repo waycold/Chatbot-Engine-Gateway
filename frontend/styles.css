@@ -1,13 +1,14 @@
 /* ==========================================================================
-   AI Agent Gateway - Modern Chatbot UI Stylesheet
-   Design System: Refined Dark Theme / Precision Slate Palette
+   AI Agent Gateway - Modern Chatbot & Corporate Analytics UI Stylesheet
+   Design System: Refined Dark Theme / Precision Slate & Analytics Palette
    ========================================================================== */
 
 /* --- 1. CSS Custom Properties / Tokens --- */
 :root {
   /* Surface & Background Colors */
   --bg-app: #090d16;
-  --bg-header: rgba(13, 19, 33, 0.85);
+  --bg-header: rgba(13, 19, 33, 0.90);
+  --bg-metrics-bar: #0b1120;
   --bg-card: #111827;
   --bg-card-hover: #172033;
   --bg-card-secondary: #1a2234;
@@ -16,6 +17,9 @@
   --bg-dropdown: #111827;
   --bg-code-header: #0d121d;
   --bg-code-body: #080c14;
+  --bg-table-header: #141c2e;
+  --bg-table-row-even: rgba(255, 255, 255, 0.015);
+  --bg-table-row-hover: rgba(59, 130, 246, 0.06);
   
   /* Message Bubble Colors */
   --bubble-user-bg: #1e3a8a;
@@ -30,14 +34,16 @@
   --accent-hover: #2563eb;
   --accent-glow: rgba(59, 130, 246, 0.25);
   --accent-subtle: rgba(59, 130, 246, 0.12);
+  --accent-analytics: #10b981;
+  --accent-analytics-subtle: rgba(16, 185, 129, 0.15);
 
   /* Status Colors */
   --status-online: #10b981;
-  --status-online-glow: rgba(16, 185, 129, 0.3);
+  --status-online-glow: rgba(16, 185, 129, 0.4);
   --status-checking: #f59e0b;
-  --status-checking-glow: rgba(245, 158, 11, 0.3);
+  --status-checking-glow: rgba(245, 158, 11, 0.35);
   --status-error: #ef4444;
-  --status-error-glow: rgba(239, 68, 68, 0.3);
+  --status-error-glow: rgba(239, 68, 68, 0.35);
 
   /* Functional Alert Colors */
   --danger: #ef4444;
@@ -55,6 +61,7 @@
   --border-medium: #334155;
   --border-focus: #3b82f6;
   --border-bubble-ai: #1e293b;
+  --border-table: #253349;
 
   /* Typography Fonts */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
@@ -67,8 +74,9 @@
   --shadow-dropdown: 0 12px 30px rgba(0, 0, 0, 0.6);
 
   /* Sizing & Transitions */
-  --header-height: 64px;
-  --input-max-width: 860px;
+  --header-height: 62px;
+  --metrics-height: 40px;
+  --input-max-width: 900px;
   --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
   --transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   --radius-sm: 6px;
@@ -91,13 +99,13 @@ html, body {
   background-color: var(--bg-app);
   color: var(--text-primary);
   font-family: var(--font-sans);
-  font-size: 15px;
+  font-size: 14.5px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Screen Reader Only Utility */
+/* Utilities */
 .sr-only {
   position: absolute;
   width: 1px;
@@ -110,8 +118,16 @@ html, body {
   border-width: 0;
 }
 
+.font-mono {
+  font-family: var(--font-mono) !important;
+}
+
 .hidden {
   display: none !important;
+}
+
+.mobile-only {
+  display: none;
 }
 
 /* --- 3. App Layout Architecture --- */
@@ -124,12 +140,12 @@ html, body {
               var(--bg-app);
 }
 
-/* --- 4. Navigation Header --- */
+/* --- 4. Top Navigation Header --- */
 .app-header {
   height: var(--header-height);
   background-color: var(--bg-header);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--border-subtle);
   display: flex;
   align-items: center;
@@ -137,11 +153,13 @@ html, body {
   padding: 0 20px;
   z-index: 50;
   flex-shrink: 0;
+  gap: 16px;
 }
 
 .header-left {
   display: flex;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .brand {
@@ -170,10 +188,11 @@ html, body {
 }
 
 .brand-title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   letter-spacing: -0.01em;
   color: var(--text-primary);
+  white-space: nowrap;
 }
 
 .brand-badge {
@@ -187,12 +206,82 @@ html, body {
   border: 1px solid rgba(59, 130, 246, 0.25);
 }
 
-/* --- 5. Agent Selector Custom Dropdown --- */
+/* --- 5. Navigation Tabs in Header --- */
 .header-center {
   display: flex;
   align-items: center;
+  justify-content: center;
+  flex: 1;
 }
 
+.nav-tabs {
+  display: inline-flex;
+  align-items: center;
+  background-color: rgba(17, 24, 39, 0.8);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-full);
+  padding: 3px;
+  gap: 2px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.nav-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.nav-tab:hover {
+  color: var(--text-primary);
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.nav-tab.active {
+  background-color: var(--accent-primary);
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.35);
+}
+
+/* Analytics Tab Special Style */
+.nav-tab-analytics {
+  position: relative;
+}
+
+.nav-tab-analytics.active {
+  background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.35);
+}
+
+.tab-badge-highlight {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background-color: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.nav-tab:not(.active) .tab-badge-highlight {
+  background-color: var(--accent-analytics-subtle);
+  color: var(--accent-analytics);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+/* --- 6. Mobile Fallback Custom Dropdown --- */
 .agent-selector-wrapper {
   position: relative;
 }
@@ -204,7 +293,7 @@ html, body {
 .select-trigger {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   background-color: var(--bg-card);
   border: 1px solid var(--border-medium);
   border-radius: var(--radius-md);
@@ -212,49 +301,6 @@ html, body {
   cursor: pointer;
   transition: all var(--transition-fast);
   user-select: none;
-  min-width: 220px;
-}
-
-.select-trigger:hover, .select-trigger:focus-visible {
-  border-color: var(--border-focus);
-  background-color: var(--bg-card-hover);
-  outline: none;
-  box-shadow: 0 0 0 2px var(--accent-glow);
-}
-
-.agent-icon-badge {
-  font-size: 18px;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.select-text {
-  display: flex;
-  flex-direction: column;
-  text-align: left;
-  flex: 1;
-}
-
-.agent-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.agent-role {
-  font-size: 11px;
-  color: var(--text-secondary);
-}
-
-.chevron-icon {
-  color: var(--text-muted);
-  transition: transform var(--transition-fast);
-}
-
-.custom-select.open .chevron-icon {
-  transform: rotate(180deg);
 }
 
 .select-options {
@@ -262,7 +308,7 @@ html, body {
   top: calc(100% + 6px);
   left: 0;
   right: 0;
-  min-width: 280px;
+  min-width: 260px;
   background-color: var(--bg-dropdown);
   border: 1px solid var(--border-medium);
   border-radius: var(--radius-md);
@@ -270,64 +316,38 @@ html, body {
   padding: 6px;
   display: none;
   z-index: 100;
-  backdrop-filter: blur(16px);
 }
 
 .custom-select.open .select-options {
   display: block;
-  animation: dropdownFadeIn 0.15s ease-out;
-}
-
-@keyframes dropdownFadeIn {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: translateY(0); }
 }
 
 .option-item {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   padding: 8px 10px;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: background-color var(--transition-fast);
 }
 
-.option-item:hover {
-  background-color: var(--bg-card-hover);
-}
-
-.option-item.active {
-  background-color: var(--accent-subtle);
-}
-
-.option-icon {
-  font-size: 20px;
-  display: flex;
-  align-items: center;
-}
+.option-item:hover { background-color: var(--bg-card-hover); }
+.option-item.active { background-color: var(--accent-subtle); }
 
 .option-content {
   display: flex;
   flex-direction: column;
 }
 
-.option-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
+.option-title { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.option-desc { font-size: 11px; color: var(--text-secondary); }
 
-.option-desc {
-  font-size: 11px;
-  color: var(--text-secondary);
-}
-
-/* --- 6. Header Right & Actions --- */
+/* --- 7. Header Right Actions --- */
 .header-right {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  flex-shrink: 0;
 }
 
 .status-badge {
@@ -379,8 +399,8 @@ html, body {
 
 .btn-icon {
   position: relative;
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   border-radius: var(--radius-md);
   background-color: transparent;
   border: 1px solid transparent;
@@ -396,12 +416,6 @@ html, body {
   background-color: var(--bg-card-hover);
   color: var(--text-primary);
   border-color: var(--border-subtle);
-}
-
-.btn-icon:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--accent-glow);
-  border-color: var(--border-focus);
 }
 
 .btn-tooltip {
@@ -424,11 +438,177 @@ html, body {
   z-index: 60;
 }
 
-.btn-icon:hover .btn-tooltip {
-  opacity: 1;
+.btn-icon:hover .btn-tooltip { opacity: 1; }
+
+/* --- 8. Live Performance Metrics Bar --- */
+.metrics-bar {
+  background-color: var(--bg-metrics-bar);
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 6px 20px;
+  flex-shrink: 0;
+  z-index: 45;
 }
 
-/* --- 7. Main Chat Workspace --- */
+.metrics-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: var(--input-max-width);
+  margin: 0 auto;
+  gap: 12px;
+  overflow-x: auto;
+}
+
+.metrics-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: nowrap;
+}
+
+.metric-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  background-color: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-sm);
+  padding: 3px 8px;
+  white-space: nowrap;
+}
+
+.metric-icon {
+  font-size: 11px;
+}
+
+.metric-title {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.metric-value {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.sse-pulse-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: var(--status-online);
+  box-shadow: 0 0 6px var(--status-online-glow);
+  display: inline-block;
+  animation: pulseLive 1.5s infinite;
+}
+
+@keyframes pulseLive {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+}
+
+.metrics-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.btn-metrics-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background-color: var(--bg-card-secondary);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.btn-metrics-action:hover {
+  background-color: var(--bg-card-hover);
+  color: var(--text-primary);
+  border-color: var(--accent-primary);
+}
+
+/* --- 9. Analytics Corporativo Quick Actions Strip --- */
+.analytics-quick-strip {
+  background-color: rgba(16, 185, 129, 0.04);
+  border-bottom: 1px solid rgba(16, 185, 129, 0.15);
+  padding: 6px 20px;
+  flex-shrink: 0;
+  z-index: 40;
+  transition: all var(--transition-normal);
+}
+
+.quick-strip-container {
+  display: flex;
+  align-items: center;
+  max-width: var(--input-max-width);
+  margin: 0 auto;
+  gap: 10px;
+  overflow-x: auto;
+}
+
+.quick-strip-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent-analytics);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.quick-chips-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.quick-chips-row::-webkit-scrollbar {
+  height: 3px;
+}
+.quick-chips-row::-webkit-scrollbar-thumb {
+  background: var(--border-medium);
+  border-radius: 3px;
+}
+
+.analytics-pill {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-full);
+  padding: 4px 10px;
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.analytics-pill:hover {
+  background-color: var(--accent-analytics-subtle);
+  border-color: var(--accent-analytics);
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+/* --- 10. Main Chat Workspace --- */
 .chat-main {
   display: flex;
   flex-direction: column;
@@ -441,68 +621,72 @@ html, body {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 24px 20px 32px;
+  padding: 20px 20px 30px;
   scroll-behavior: smooth;
 }
 
-/* Custom Sleek Scrollbar */
+/* Custom Sleek Scrollbars */
 .chat-scroll-container::-webkit-scrollbar,
 textarea::-webkit-scrollbar,
-pre::-webkit-scrollbar {
+pre::-webkit-scrollbar,
+.table-wrapper::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 .chat-scroll-container::-webkit-scrollbar-track,
 textarea::-webkit-scrollbar-track,
-pre::-webkit-scrollbar-track {
+pre::-webkit-scrollbar-track,
+.table-wrapper::-webkit-scrollbar-track {
   background: transparent;
 }
 
 .chat-scroll-container::-webkit-scrollbar-thumb,
 textarea::-webkit-scrollbar-thumb,
-pre::-webkit-scrollbar-thumb {
+pre::-webkit-scrollbar-thumb,
+.table-wrapper::-webkit-scrollbar-thumb {
   background: var(--border-medium);
   border-radius: 4px;
 }
 
 .chat-scroll-container::-webkit-scrollbar-thumb:hover,
 textarea::-webkit-scrollbar-thumb:hover,
-pre::-webkit-scrollbar-thumb:hover {
+pre::-webkit-scrollbar-thumb:hover,
+.table-wrapper::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
 }
 
-/* --- 8. Welcome Hero Screen --- */
+/* --- 11. Welcome Hero Screen --- */
 .welcome-screen {
-  max-width: 680px;
-  margin: 40px auto;
+  max-width: 720px;
+  margin: 30px auto;
   text-align: center;
-  animation: fadeIn 0.4s ease-out;
+  animation: fadeIn 0.35s ease-out;
 }
 
 .welcome-card {
   background-color: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
-  padding: 36px 28px;
+  padding: 32px 24px;
   box-shadow: var(--shadow-md);
 }
 
 .welcome-avatar {
-  width: 64px;
-  height: 64px;
+  width: 60px;
+  height: 60px;
   background-color: var(--accent-subtle);
   border: 1px solid rgba(59, 130, 246, 0.3);
   border-radius: 50%;
-  font-size: 32px;
+  font-size: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0 auto 16px;
+  margin: 0 auto 14px;
 }
 
 .welcome-title {
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--text-primary);
@@ -510,22 +694,22 @@ pre::-webkit-scrollbar-thumb:hover {
 }
 
 .welcome-subtitle {
-  font-size: 14px;
+  font-size: 13.5px;
   color: var(--text-secondary);
   line-height: 1.6;
-  max-width: 520px;
-  margin: 0 auto 24px;
+  max-width: 540px;
+  margin: 0 auto 20px;
 }
 
 .prompt-starters {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   text-align: left;
 }
 
 .starters-label {
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -542,9 +726,9 @@ pre::-webkit-scrollbar-thumb:hover {
   background-color: var(--bg-card-secondary);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  padding: 12px 14px;
+  padding: 10px 12px;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 12.5px;
   text-align: left;
   cursor: pointer;
   transition: all var(--transition-fast);
@@ -568,24 +752,24 @@ pre::-webkit-scrollbar-thumb:hover {
   margin-top: 1px;
 }
 
-/* --- 9. Messages Feed & Bubbles --- */
+/* --- 12. Messages Feed & Bubbles --- */
 .messages-container {
   max-width: var(--input-max-width);
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 18px;
 }
 
 .message-row {
   display: flex;
   gap: 12px;
   width: 100%;
-  animation: messageSlideIn 0.25s ease-out;
+  animation: messageSlideIn 0.22s ease-out;
 }
 
 @keyframes messageSlideIn {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
@@ -598,7 +782,7 @@ pre::-webkit-scrollbar-thumb:hover {
   background-color: var(--bubble-user-bg);
   color: var(--bubble-user-text);
   border-radius: var(--radius-lg) var(--radius-lg) 2px var(--radius-lg);
-  max-width: 75%;
+  max-width: 78%;
   padding: 12px 16px;
   box-shadow: var(--shadow-sm);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -634,6 +818,7 @@ pre::-webkit-scrollbar-thumb:hover {
   display: flex;
   flex-direction: column;
   max-width: calc(100% - 46px);
+  width: 100%;
 }
 
 .message-meta-header {
@@ -669,7 +854,7 @@ pre::-webkit-scrollbar-thumb:hover {
 /* System Message Notice */
 .message-row.system {
   justify-content: center;
-  margin: 6px 0;
+  margin: 4px 0;
 }
 
 .message-row.system .message-bubble {
@@ -677,8 +862,8 @@ pre::-webkit-scrollbar-thumb:hover {
   color: var(--bubble-system-text);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-full);
-  padding: 6px 14px;
-  font-size: 12px;
+  padding: 5px 12px;
+  font-size: 11.5px;
   font-weight: 500;
   display: flex;
   align-items: center;
@@ -701,12 +886,12 @@ pre::-webkit-scrollbar-thumb:hover {
   50% { opacity: 0; }
 }
 
-/* Message Actions Toolbar (Copy, Retry) */
+/* Message Actions Toolbar */
 .message-toolbar {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-top: 8px;
+  margin-top: 6px;
   padding-left: 2px;
 }
 
@@ -719,7 +904,7 @@ pre::-webkit-scrollbar-thumb:hover {
   border-radius: var(--radius-sm);
   color: var(--text-muted);
   font-size: 11px;
-  padding: 3px 8px;
+  padding: 3px 7px;
   cursor: pointer;
   transition: all var(--transition-fast);
 }
@@ -737,7 +922,7 @@ pre::-webkit-scrollbar-thumb:hover {
   font-family: var(--font-mono);
 }
 
-/* --- 10. Markdown Typography Inside Bubbles --- */
+/* --- 13. Markdown Typography & Enhanced Table Rendering --- */
 .message-bubble p {
   margin-bottom: 10px;
   line-height: 1.6;
@@ -757,13 +942,13 @@ pre::-webkit-scrollbar-thumb:hover {
   line-height: 1.3;
 }
 
-.message-bubble h1 { font-size: 18px; }
-.message-bubble h2 { font-size: 16px; }
-.message-bubble h3 { font-size: 14px; }
+.message-bubble h1 { font-size: 17px; }
+.message-bubble h2 { font-size: 15px; }
+.message-bubble h3 { font-size: 13.5px; }
 
 .message-bubble ul, 
 .message-bubble ol {
-  margin: 8px 0 12px 20px;
+  margin: 6px 0 10px 20px;
   line-height: 1.6;
 }
 
@@ -793,21 +978,121 @@ pre::-webkit-scrollbar-thumb:hover {
   border-bottom-style: solid;
 }
 
-.message-bubble hr {
-  border: none;
-  border-top: 1px solid var(--border-subtle);
+/* Enhanced Markdown Tables with Smooth Scroll & Corporate KPI Styling */
+.table-wrapper {
   margin: 14px 0;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-table);
+  background-color: #0b111e;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
 }
 
-/* Inline Code */
-.message-bubble code:not(pre code) {
-  font-family: var(--font-mono);
-  font-size: 12.5px;
-  background-color: var(--bg-code-body);
-  color: #38bdf8;
-  padding: 2px 5px;
+.table-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: #0e1526;
+  border-bottom: 1px solid var(--border-table);
+  padding: 6px 12px;
+}
+
+.table-tag {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.btn-copy-table {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background-color: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 6px;
   border-radius: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: all var(--transition-fast);
+}
+
+.btn-copy-table:hover {
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  border-color: var(--border-medium);
+}
+
+.table-scroll-container {
+  overflow-x: auto;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+
+.message-bubble table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  text-align: left;
+}
+
+.message-bubble th {
+  background-color: var(--bg-table-header);
+  color: var(--text-primary);
+  font-weight: 600;
+  padding: 10px 14px;
+  border-bottom: 2px solid var(--border-medium);
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
+
+.message-bubble td {
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.message-bubble tr:nth-child(even) td {
+  background-color: var(--bg-table-row-even);
+}
+
+.message-bubble tr:hover td {
+  background-color: var(--bg-table-row-hover);
+}
+
+/* KPI Badges inside Tables */
+.kpi-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+
+.kpi-badge-up {
+  background-color: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.kpi-badge-down {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.kpi-badge-neutral {
+  background-color: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.3);
 }
 
 /* Code Blocks */
@@ -864,42 +1149,13 @@ pre::-webkit-scrollbar-thumb:hover {
 
 .code-block-container code {
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 12.5px;
   color: #f1f5f9;
   line-height: 1.5;
   white-space: pre;
 }
 
-/* Markdown Tables */
-.table-wrapper {
-  overflow-x: auto;
-  margin: 12px 0;
-}
-
-.message-bubble table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-
-.message-bubble th, 
-.message-bubble td {
-  border: 1px solid var(--border-medium);
-  padding: 8px 12px;
-  text-align: left;
-}
-
-.message-bubble th {
-  background-color: var(--bg-card-secondary);
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.message-bubble tr:nth-child(even) {
-  background-color: rgba(255, 255, 255, 0.02);
-}
-
-/* --- 11. Typing & Streaming Indicator --- */
+/* --- 14. Typing & Streaming Indicator --- */
 .typing-indicator-container {
   display: flex;
   gap: 12px;
@@ -946,9 +1202,9 @@ pre::-webkit-scrollbar-thumb:hover {
 .btn-scroll-bottom {
   position: absolute;
   right: 24px;
-  bottom: 90px;
-  width: 38px;
-  height: 38px;
+  bottom: 85px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   background-color: var(--bg-card);
   border: 1px solid var(--border-medium);
@@ -968,12 +1224,12 @@ pre::-webkit-scrollbar-thumb:hover {
   transform: translateY(-2px);
 }
 
-/* --- 12. Bottom Chat Input Footer --- */
+/* --- 15. Bottom Chat Input Footer --- */
 .chat-footer {
   flex-shrink: 0;
   background-color: var(--bg-app);
   border-top: 1px solid var(--border-subtle);
-  padding: 14px 20px 16px;
+  padding: 12px 20px 14px;
   z-index: 30;
 }
 
@@ -1010,7 +1266,7 @@ pre::-webkit-scrollbar-thumb:hover {
   outline: none;
   color: var(--text-primary);
   font-family: var(--font-sans);
-  font-size: 14.5px;
+  font-size: 14px;
   line-height: 1.45;
   padding-right: 80px;
 }
@@ -1087,7 +1343,7 @@ pre::-webkit-scrollbar-thumb:hover {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  margin-top: 8px;
+  margin-top: 6px;
   font-size: 11px;
   color: var(--text-dim);
 }
@@ -1104,7 +1360,6 @@ pre::-webkit-scrollbar-thumb:hover {
 
 .session-id-display {
   cursor: pointer;
-  transition: color var(--transition-fast);
 }
 
 .session-id-display:hover {
@@ -1116,7 +1371,7 @@ pre::-webkit-scrollbar-thumb:hover {
   color: var(--text-muted);
 }
 
-/* --- 13. Modals & Dialogs --- */
+/* --- 16. Modals & Dialogs --- */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -1144,9 +1399,7 @@ pre::-webkit-scrollbar-thumb:hover {
   animation: modalScaleUp 0.2s ease-out;
 }
 
-.modal-card-sm {
-  max-width: 400px;
-}
+.modal-card-sm { max-width: 400px; }
 
 @keyframes modalScaleUp {
   from { opacity: 0; transform: scale(0.96); }
@@ -1165,7 +1418,7 @@ pre::-webkit-scrollbar-thumb:hover {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -1177,12 +1430,9 @@ pre::-webkit-scrollbar-thumb:hover {
   font-size: 22px;
   cursor: pointer;
   line-height: 1;
-  padding: 0 4px;
 }
 
-.btn-close-modal:hover {
-  color: var(--text-primary);
-}
+.btn-close-modal:hover { color: var(--text-primary); }
 
 .modal-body {
   padding: 20px;
@@ -1194,7 +1444,7 @@ pre::-webkit-scrollbar-thumb:hover {
 }
 
 .modal-text {
-  font-size: 14px;
+  font-size: 13.5px;
   color: var(--text-secondary);
   line-height: 1.5;
 }
@@ -1239,24 +1489,13 @@ pre::-webkit-scrollbar-thumb:hover {
   color: var(--text-primary);
   font-family: var(--font-sans);
   outline: none;
-  transition: border-color var(--transition-fast);
 }
 
-.form-input:focus {
-  border-color: var(--border-focus);
-}
+.form-input:focus { border-color: var(--border-focus); }
 
-.form-hint {
-  font-size: 11px;
-  color: var(--text-muted);
-}
+.form-hint { font-size: 11px; color: var(--text-muted); }
+.form-hint code { font-family: var(--font-mono); color: var(--text-secondary); }
 
-.form-hint code {
-  font-family: var(--font-mono);
-  color: var(--text-secondary);
-}
-
-/* Radio Group Settings */
 .radio-group {
   display: flex;
   flex-direction: column;
@@ -1269,10 +1508,7 @@ pre::-webkit-scrollbar-thumb:hover {
   cursor: pointer;
 }
 
-.radio-option input[type="radio"] {
-  position: absolute;
-  opacity: 0;
-}
+.radio-option input[type="radio"] { position: absolute; opacity: 0; }
 
 .radio-card {
   width: 100%;
@@ -1288,23 +1524,10 @@ pre::-webkit-scrollbar-thumb:hover {
   background-color: var(--accent-subtle);
 }
 
-.radio-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
+.radio-title { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.radio-desc { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
 
-.radio-desc {
-  font-size: 11px;
-  color: var(--text-secondary);
-  margin-top: 2px;
-}
-
-/* Session Row */
-.session-manager-row {
-  display: flex;
-  gap: 6px;
-}
+.session-manager-row { display: flex; gap: 6px; }
 
 .danger-zone {
   display: flex;
@@ -1316,16 +1539,8 @@ pre::-webkit-scrollbar-thumb:hover {
   border-radius: var(--radius-sm);
 }
 
-.danger-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--danger);
-}
-
-.danger-desc {
-  font-size: 11px;
-  color: var(--text-secondary);
-}
+.danger-title { font-size: 13px; font-weight: 600; color: var(--danger); }
+.danger-desc { font-size: 11px; color: var(--text-secondary); }
 
 .modal-footer {
   display: flex;
@@ -1346,12 +1561,9 @@ pre::-webkit-scrollbar-thumb:hover {
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: background-color var(--transition-fast);
 }
 
-.btn-primary:hover {
-  background-color: var(--accent-hover);
-}
+.btn-primary:hover { background-color: var(--accent-hover); }
 
 .btn-secondary {
   background-color: var(--bg-card-secondary);
@@ -1362,7 +1574,6 @@ pre::-webkit-scrollbar-thumb:hover {
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all var(--transition-fast);
 }
 
 .btn-secondary:hover {
@@ -1379,14 +1590,11 @@ pre::-webkit-scrollbar-thumb:hover {
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: background-color var(--transition-fast);
 }
 
-.btn-danger:hover {
-  background-color: var(--danger-hover);
-}
+.btn-danger:hover { background-color: var(--danger-hover); }
 
-/* --- 14. Toast Notification System --- */
+/* --- 17. Toast Notification System --- */
 .toast-container {
   position: fixed;
   bottom: 24px;
@@ -1429,50 +1637,39 @@ pre::-webkit-scrollbar-thumb:hover {
   to { opacity: 1; }
 }
 
-/* --- 15. Responsive Breakpoints --- */
-@media (max-width: 768px) {
+/* --- 18. Responsive Breakpoints --- */
+@media (max-width: 900px) {
+  .nav-tabs {
+    display: none;
+  }
+  .mobile-only {
+    display: block;
+  }
+  .brand-title {
+    display: none;
+  }
+  .metrics-group {
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 600px) {
   .app-header {
     padding: 0 12px;
   }
-
-  .brand-info {
-    display: none;
+  .metrics-bar {
+    padding: 4px 10px;
   }
-
-  .select-trigger {
-    min-width: 170px;
-    padding: 4px 8px;
-  }
-
-  .agent-role {
-    display: none;
-  }
-
   .status-label {
     display: none;
   }
-
-  .status-badge {
-    padding: 6px;
-  }
-
-  .chat-scroll-container {
-    padding: 16px 12px 24px;
-  }
-
   .starters-grid {
     grid-template-columns: 1fr;
   }
-
   .message-row.user .message-bubble {
     max-width: 88%;
   }
-
   .chat-footer {
-    padding: 10px 12px 14px;
-  }
-
-  .footer-meta {
-    font-size: 10px;
+    padding: 8px 12px 10px;
   }
 }

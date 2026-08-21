@@ -1,5 +1,6 @@
 """HTTP client service for internal communication with the Django monolith."""
 import logging
+import re
 from typing import Any, Optional
 import httpx
 from app.core.config import settings
@@ -108,9 +109,9 @@ class DjangoAPIService:
         category: Optional[str] = None,
         limit: int = 5,
     ) -> list[dict[str, Any]]:
-        """Searches products in the Django e-commerce catalog via /api/v1/internal/catalog/search/.
+        """Searches products in the Django e-commerce catalog via /api/v1/internal/catalog/search/ or /api/products/.
 
-        Falls back to mock catalog items if Django endpoint is unreachable.
+        Performs token-based relevance matching and falls back to representative mock catalog.
         """
         params: dict[str, Any] = {"limit": limit}
         if query:
@@ -118,53 +119,123 @@ class DjangoAPIService:
         if category:
             params["category"] = category
 
-        try:
-            client = await self.get_client()
-            async with client:
-                response = await client.get("/api/v1/internal/catalog/search/", params=params)
-                if response.status_code == 200:
-                    data = response.json()
-                    if isinstance(data, dict):
-                        return data.get("items", [])
-                    if isinstance(data, list):
-                        return data
-        except Exception as exc:
-            logger.warning("Failed to query catalog from Django: %s. Using default catalog.", exc)
+        # Attempt to query Django backend
+        for endpoint in ["/api/v1/internal/catalog/search/", "/api/products/"]:
+            try:
+                client = await self.get_client()
+                async with client:
+                    response = await client.get(endpoint, params=params)
+                    if response.status_code == 200:
+                        data = response.json()
+                        if isinstance(data, dict):
+                            items = data.get("items") or data.get("results") or []
+                            if items:
+                                return items
+                        elif isinstance(data, list) and data:
+                            return data
+            except Exception as exc:
+                logger.debug("Catalog endpoint '%s' query error: %s", endpoint, exc)
 
-        # Fallback mock catalog
+        # Fallback representative mock catalog
         mock_products = [
             {
                 "id": 1,
                 "name": "Servicio Cloud AI",
-                "category": "Cursos",
+                "category": "Servicios",
                 "price": 49.99,
+                "currency": "USD",
                 "stock": 10,
-                "description": "Domina la construcción de microservicios de alto rendimiento con FastAPI, Pydantic v2 y Docker.",
+                "description": "Despliegue y configuración de microservicios de IA escalables en la nube (Render, AWS, GCP).",
             },
             {
                 "id": 2,
                 "name": "Consultoría DevOps",
-                "category": "Software",
+                "category": "Servicios",
                 "price": 120.00,
+                "currency": "USD",
                 "stock": 5,
-                "description": "Librería plug-and-play para orquestar agentes multi-rol con Google GenAI y streaming SSE.",
+                "description": "Optimización de pipelines CI/CD, contenedorización con Docker y arquitecturas resilientes.",
             },
             {
                 "id": 3,
+                "name": "Curso Avanzado de FastAPI & Microservicios",
+                "category": "Cursos",
+                "price": 49.99,
+                "currency": "USD",
+                "stock": 50,
+                "description": "Domina la construcción de microservicios de alto rendimiento con FastAPI, Pydantic v2 y Docker.",
+            },
+            {
+                "id": 4,
+                "name": "Módulo de Integración LLM & Agentes Autónomos",
+                "category": "Software",
+                "price": 89.00,
+                "currency": "USD",
+                "stock": 25,
+                "description": "Librería plug-and-play para orquestar agentes multi-rol con Google GenAI y streaming SSE.",
+            },
+            {
+                "id": 5,
                 "name": "Consultoría de Arquitectura de Software (1 Hora)",
                 "category": "Servicios",
                 "price": 120.00,
+                "currency": "USD",
                 "stock": 8,
                 "description": "Sesión 1 a 1 de revisión de arquitectura, escalabilidad y optimización de microservicios.",
             },
+            {
+                "id": 6,
+                "name": "Template Backend Django + FastAPI Gateway",
+                "category": "Templates",
+                "price": 29.99,
+                "currency": "USD",
+                "stock": 100,
+                "description": "Boilerplate de producción desacoplado con autenticación por secret y Redis pub/sub.",
+            },
         ]
 
-        q_lower = (query or "").lower()
-        matched = [
-            p for p in mock_products
-            if q_lower in str(p.get("name", "")).lower() or q_lower in str(p.get("description", "")).lower()
-        ]
-        return matched if matched else mock_products[:limit]
+        if not query or not query.strip():
+            if category:
+                cat_lower = category.lower()
+                filtered = [p for p in mock_products if cat_lower in p["category"].lower()]
+                return filtered[:limit] if filtered else mock_products[:limit]
+            return mock_products[:limit]
+
+        query_clean = query.strip().lower()
+        # Extract meaningful alphanumeric tokens
+        tokens = [t for t in re.findall(r'\b\w{2,}\b', query_clean)]
+
+        scored_products: list[tuple[int, dict[str, Any]]] = []
+        for p in mock_products:
+            score = 0
+            name_lower = p["name"].lower()
+            desc_lower = p["description"].lower()
+            cat_lower = p["category"].lower()
+
+            # Exact name substring match
+            if query_clean in name_lower:
+                score += 50
+            if name_lower in query_clean:
+                score += 40
+
+            # Token level matches
+            for token in tokens:
+                if token in name_lower:
+                    score += 15
+                if token in desc_lower:
+                    score += 5
+                if token in cat_lower:
+                    score += 8
+
+            if score > 0:
+                scored_products.append((score, p))
+
+        if scored_products:
+            scored_products.sort(key=lambda x: x[0], reverse=True)
+            return [p for _, p in scored_products[:limit]]
+
+        # Return default top products if no keyword matched
+        return mock_products[:limit]
 
     async def query_analytics(
         self,

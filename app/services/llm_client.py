@@ -2,6 +2,7 @@
 import asyncio
 import inspect
 import logging
+import random
 from typing import Any, AsyncGenerator, Optional, Union
 
 try:
@@ -43,14 +44,11 @@ class LLMTimeoutError(LLMServiceError):
         super().__init__(message=message, status_code=504)
 
 
-import random
-
 class LLMClientService:
     """Wrapper service for Google GenAI SDK (`google-genai`).
 
     Provides high-level asynchronous methods for standard generation,
-    streaming completions, tool/function calling, and intent classification
-    with automatic Exponential Backoff retries for transient errors.
+    streaming completions, dynamic multi-model fallbacks, and Exponential Backoff retries.
     """
 
     def __init__(self, api_key: Optional[str] = None) -> None:
@@ -63,26 +61,53 @@ class LLMClientService:
         self.max_retry_delay = getattr(settings, "LLM_MAX_RETRY_DELAY", 8.0)
         self._client: Optional[Any] = None
 
+    def _is_api_key_configured(self) -> bool:
+        """Determines whether a genuine Google AI Studio API Key is configured."""
+        if not self.api_key:
+            return False
+        placeholder_keys = {
+            "your-google-ai-studio-api-key-here",
+            "your_api_key_here",
+            "test-mock-gemini-key-12345",
+            "",
+        }
+        if self.api_key in placeholder_keys or self.api_key.startswith("test-mock"):
+            return False
+        return True
+
     def _get_active_client(self) -> Optional[Any]:
-        """Returns active client or initializes Google GenAI client if not mocked."""
+        """Returns active client or initializes Google GenAI client if configured."""
         if self._client is not None:
             return self._client
 
-        if GENAI_AVAILABLE and self.api_key and not self.api_key.startswith("test-mock") and self.api_key != "your-google-ai-studio-api-key-here":
+        if GENAI_AVAILABLE and self._is_api_key_configured():
             try:
                 self._client = genai.Client(api_key=self.api_key)
-                logger.info("Initialized live Google GenAI Client.")
+                masked_key = f"{self.api_key[:6]}...{self.api_key[-4:]}" if len(self.api_key) > 10 else "***"
+                logger.info("Initialized live Google GenAI Client with key: %s", masked_key)
                 return self._client
             except Exception as exc:
                 logger.warning("Failed to initialize Google GenAI Client: %s", exc)
                 return None
-            return None
         return None
 
     @property
     def is_available(self) -> bool:
         """Returns True if live or mocked Google GenAI client is active."""
         return self._get_active_client() is not None
+
+    def _get_candidate_models(self, primary_model: Optional[str] = None) -> list[str]:
+        """Returns ordered list of candidate Gemini models for graceful fallback."""
+        target = primary_model or self.default_model
+        fallback_order = [target, "gemini-3.7-flash", "gemini-3.6-flash", "gemini-2.0-flash"]
+        # Deduplicate while preserving order
+        seen = set()
+        candidates: list[str] = []
+        for m in fallback_order:
+            if m and m not in seen:
+                seen.add(m)
+                candidates.append(m)
+        return candidates
 
     def _is_transient_error(self, exc: Exception) -> bool:
         """Determines if an exception is a transient error eligible for retry with backoff."""
@@ -107,6 +132,11 @@ class LLMClientService:
             "temporarily unavailable",
         ]
         return any(ind in err_str for ind in transient_indicators)
+
+    def _is_model_unavailable_error(self, exc: Exception) -> bool:
+        """Determines if an error is due to an invalid/unsupported model name."""
+        err_str = str(exc).lower()
+        return "404" in err_str or "not found" in err_str or "unknown model" in err_str or "invalid model" in err_str
 
     def _build_config(
         self,
@@ -145,13 +175,13 @@ class LLMClientService:
         max_output_tokens: Optional[int] = None,
         tools: Optional[list[Any]] = None,
     ) -> str:
-        """Asynchronously generates standard non-streamed text completion with Exponential Backoff retry."""
-        target_model = model or self.default_model
+        """Asynchronously generates standard text completion with model fallback and Exponential Backoff."""
         client = self._get_active_client()
 
         if client is None:
             return self._generate_fallback_response(contents, system_instruction)
 
+        candidate_models = self._get_candidate_models(model)
         config = self._build_config(
             system_instruction=system_instruction,
             temperature=temperature,
@@ -159,49 +189,59 @@ class LLMClientService:
             tools=tools,
         )
 
-        for attempt in range(self.max_retries):
-            try:
-                async with asyncio.timeout(self.timeout):
-                    if hasattr(client, "aio") and hasattr(client.aio, "models"):
-                        res = client.aio.models.generate_content(
-                            model=target_model,
-                            contents=contents,
-                            config=config,
-                        )
-                        response = await res if inspect.isawaitable(res) else res
-                    elif hasattr(client, "models"):
-                        res = client.models.generate_content(
-                            model=target_model,
-                            contents=contents,
-                            config=config,
-                        )
-                        response = await res if inspect.isawaitable(res) else res
-                    else:
-                        return self._generate_fallback_response(contents, system_instruction)
+        last_exception: Optional[Exception] = None
 
-                    if response and hasattr(response, "text") and response.text:
-                        return response.text
-                    return "No content generated."
+        for current_model in candidate_models:
+            for attempt in range(self.max_retries):
+                try:
+                    async with asyncio.timeout(self.timeout):
+                        if hasattr(client, "aio") and hasattr(client.aio, "models"):
+                            res = client.aio.models.generate_content(
+                                model=current_model,
+                                contents=contents,
+                                config=config,
+                            )
+                            response = await res if inspect.isawaitable(res) else res
+                        elif hasattr(client, "models"):
+                            res = client.models.generate_content(
+                                model=current_model,
+                                contents=contents,
+                                config=config,
+                            )
+                            response = await res if inspect.isawaitable(res) else res
+                        else:
+                            return self._generate_fallback_response(contents, system_instruction)
 
-            except Exception as exc:
-                is_transient = self._is_transient_error(exc)
-                if not is_transient or attempt == self.max_retries - 1:
-                    logger.error(
-                        "LLM generation failed on attempt %d/%d (transient=%s): %s",
-                        attempt + 1, self.max_retries, is_transient, exc
+                        if response and hasattr(response, "text") and response.text:
+                            return response.text
+                        return "No content generated."
+
+                except Exception as exc:
+                    last_exception = exc
+                    # If model is not found/supported, switch to next model immediately
+                    if self._is_model_unavailable_error(exc):
+                        logger.warning("Model '%s' unavailable (%s). Trying next candidate...", current_model, exc)
+                        break
+
+                    is_transient = self._is_transient_error(exc)
+                    if not is_transient or attempt == self.max_retries - 1:
+                        logger.warning(
+                            "Model '%s' attempt %d/%d failed (transient=%s): %s",
+                            current_model, attempt + 1, self.max_retries, is_transient, exc
+                        )
+                        break
+
+                    # Exponential backoff calculation with randomized jitter
+                    delay = min(self.max_retry_delay, self.initial_retry_delay * (self.backoff_factor ** attempt))
+                    delay_jittered = delay + random.uniform(0.1, 0.4)
+                    logger.info(
+                        "Model '%s' retry in %.2fs (attempt %d/%d)...",
+                        current_model, delay_jittered, attempt + 1, self.max_retries
                     )
-                    break
+                    await asyncio.sleep(delay_jittered)
 
-                # Exponential backoff calculation with randomized jitter
-                delay = min(self.max_retry_delay, self.initial_retry_delay * (self.backoff_factor ** attempt))
-                delay_jittered = delay + random.uniform(0.1, 0.4)
-                logger.warning(
-                    "LLM attempt %d/%d transient error: '%s'. Retrying in %.2fs (Exponential Backoff)...",
-                    attempt + 1, self.max_retries, exc, delay_jittered
-                )
-                await asyncio.sleep(delay_jittered)
-
-        return self._generate_fallback_response(contents, system_instruction)
+        logger.error("All candidate models failed. Last exception: %s", last_exception)
+        return self._generate_fallback_response(contents, system_instruction, error_context=last_exception)
 
     async def generate_content_stream(
         self,
@@ -212,8 +252,7 @@ class LLMClientService:
         max_output_tokens: Optional[int] = None,
         tools: Optional[list[Any]] = None,
     ) -> AsyncGenerator[str, None]:
-        """Asynchronously streams response token chunks with Exponential Backoff retry."""
-        target_model = model or self.default_model
+        """Asynchronously streams response token chunks with model fallback and Exponential Backoff."""
         client = self._get_active_client()
 
         if client is None:
@@ -223,6 +262,7 @@ class LLMClientService:
                 await asyncio.sleep(0.02)
             return
 
+        candidate_models = self._get_candidate_models(model)
         config = self._build_config(
             system_instruction=system_instruction,
             temperature=temperature,
@@ -230,47 +270,58 @@ class LLMClientService:
             tools=tools,
         )
 
-        for attempt in range(self.max_retries):
-            try:
-                if hasattr(client, "aio") and hasattr(client.aio, "models"):
-                    stream_res = client.aio.models.generate_content_stream(
-                        model=target_model,
-                        contents=contents,
-                        config=config,
-                    )
-                    stream_obj = await stream_res if inspect.isawaitable(stream_res) else stream_res
-                    async for chunk in stream_obj:
-                        if chunk and hasattr(chunk, "text") and chunk.text:
-                            yield chunk.text
-                    return
-                elif hasattr(client, "models"):
-                    sync_stream = client.models.generate_content_stream(
-                        model=target_model,
-                        contents=contents,
-                        config=config,
-                    )
-                    for chunk in sync_stream:
-                        if chunk and hasattr(chunk, "text") and chunk.text:
-                            yield chunk.text
-                    return
-            except Exception as exc:
-                is_transient = self._is_transient_error(exc)
-                if not is_transient or attempt == self.max_retries - 1:
-                    logger.error(
-                        "LLM stream failed on attempt %d/%d (transient=%s): %s",
-                        attempt + 1, self.max_retries, is_transient, exc
-                    )
-                    break
+        last_exception: Optional[Exception] = None
 
-                delay = min(self.max_retry_delay, self.initial_retry_delay * (self.backoff_factor ** attempt))
-                delay_jittered = delay + random.uniform(0.1, 0.4)
-                logger.warning(
-                    "LLM stream attempt %d/%d transient error: '%s'. Retrying in %.2fs (Exponential Backoff)...",
-                    attempt + 1, self.max_retries, exc, delay_jittered
-                )
-                await asyncio.sleep(delay_jittered)
+        for current_model in candidate_models:
+            for attempt in range(self.max_retries):
+                try:
+                    if hasattr(client, "aio") and hasattr(client.aio, "models"):
+                        stream_res = client.aio.models.generate_content_stream(
+                            model=current_model,
+                            contents=contents,
+                            config=config,
+                        )
+                        stream_obj = await stream_res if inspect.isawaitable(stream_res) else stream_res
+                        async for chunk in stream_obj:
+                            if chunk and hasattr(chunk, "text") and chunk.text:
+                                yield chunk.text
+                        return
 
-        fallback_text = self._generate_fallback_response(contents, system_instruction)
+                    elif hasattr(client, "models"):
+                        sync_stream = client.models.generate_content_stream(
+                            model=current_model,
+                            contents=contents,
+                            config=config,
+                        )
+                        for chunk in sync_stream:
+                            if chunk and hasattr(chunk, "text") and chunk.text:
+                                yield chunk.text
+                        return
+
+                except Exception as exc:
+                    last_exception = exc
+                    if self._is_model_unavailable_error(exc):
+                        logger.warning("Stream model '%s' unavailable (%s). Switching model...", current_model, exc)
+                        break
+
+                    is_transient = self._is_transient_error(exc)
+                    if not is_transient or attempt == self.max_retries - 1:
+                        logger.warning(
+                            "Stream model '%s' attempt %d/%d failed (transient=%s): %s",
+                            current_model, attempt + 1, self.max_retries, is_transient, exc
+                        )
+                        break
+
+                    delay = min(self.max_retry_delay, self.initial_retry_delay * (self.backoff_factor ** attempt))
+                    delay_jittered = delay + random.uniform(0.1, 0.4)
+                    logger.info(
+                        "Stream model '%s' retry in %.2fs (attempt %d/%d)...",
+                        current_model, delay_jittered, attempt + 1, self.max_retries
+                    )
+                    await asyncio.sleep(delay_jittered)
+
+        logger.error("All stream candidate models failed. Falling back. Last exception: %s", last_exception)
+        fallback_text = self._generate_fallback_response(contents, system_instruction, error_context=last_exception)
         for word in fallback_text.split(" "):
             yield word + " "
             await asyncio.sleep(0.02)
@@ -279,12 +330,25 @@ class LLMClientService:
         self,
         contents: Union[str, list[Any]],
         system_instruction: Optional[str] = None,
+        error_context: Optional[Exception] = None,
     ) -> str:
-        """Provides informative fallback response when live API key or SDK is unavailable."""
+        """Provides accurate, contextual fallback response distinguishing unconfigured key vs upstream error."""
         prompt_preview = str(contents)[:120]
+
+        # Case 1: GEMINI_API_KEY is truly not configured
+        if not self._is_api_key_configured():
+            return (
+                f"[Simulated GenAI Response] El Gateway ha procesado tu consulta: "
+                f"'{prompt_preview}...'. Configura GEMINI_API_KEY en .env para respuestas en vivo de Gemini."
+            )
+
+        # Case 2: GEMINI_API_KEY is configured, but upstream provider encountered transient errors/outage
+        logger.info("Generating professional resilience fallback for query: '%s'", prompt_preview)
         return (
-            f"[Simulated GenAI Response] El Gateway ha procesado tu consulta: "
-            f"'{prompt_preview}...'. Configura GEMINI_API_KEY en .env para respuestas en vivo de Gemini."
+            f"[AI Agent Gateway] Gracias por tu mensaje. El servicio de IA está procesando solicitudes en "
+            f"modo de contingencia temporal debido a alta demanda o latencia en el proveedor. "
+            f"Hemos recibido tu consulta: '{prompt_preview}...'. Si requieres asistencia inmediata, "
+            f"puedes reintentar en unos instantes o consultar las secciones de portafolio y catálogo."
         )
 
 

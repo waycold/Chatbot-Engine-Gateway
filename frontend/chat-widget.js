@@ -134,20 +134,48 @@
         const lines = match.trim().split('\n').filter(l => l.trim().length > 0);
         if (lines.length < 2) return match;
         
-        let html = '<div class="table-wrapper"><table>';
-        let isHeader = true;
+        let alignments = [];
+        let cleanLines = [];
 
-        lines.forEach((line, idx) => {
-          if (line.includes('---')) return; // Separator row
+        lines.forEach(line => {
+          if (line.includes('---')) {
+            const alignCells = line.split('|').map(c => c.trim()).filter((c, i, arr) => i > 0 && i < arr.length - 1);
+            alignments = alignCells.map(c => {
+              if (c.startsWith(':') && c.endsWith(':')) return 'center';
+              if (c.endsWith(':')) return 'right';
+              return 'left';
+            });
+          } else {
+            cleanLines.push(line);
+          }
+        });
+
+        if (cleanLines.length === 0) return match;
+
+        let html = '<div class="table-wrapper"><table>';
+
+        cleanLines.forEach((line, idx) => {
           const cells = line.split('|').map(c => c.trim()).filter((c, i, arr) => i > 0 && i < arr.length - 1);
           
           if (idx === 0) {
             html += '<thead><tr>';
-            cells.forEach(c => html += `<th>${c}</th>`);
+            cells.forEach((c, cIdx) => {
+              const align = alignments[cIdx] || 'left';
+              html += `<th style="text-align: ${align};">${c}</th>`;
+            });
             html += '</tr></thead><tbody>';
           } else {
             html += '<tr>';
-            cells.forEach(c => html += `<td>${c}</td>`);
+            cells.forEach((c, cIdx) => {
+              const align = alignments[cIdx] || (/^[\$€£]?\s*[\d,.]+%?$/.test(c) ? 'right' : 'left');
+              let cellContent = c;
+              if (/^\+[\d,.]+%/.test(c)) {
+                cellContent = `<span class="kpi-tag kpi-up">▲ ${c}</span>`;
+              } else if (/^\-[\d,.]+%/.test(c)) {
+                cellContent = `<span class="kpi-tag kpi-down">▼ ${c}</span>`;
+              }
+              html += `<td style="text-align: ${align};">${cellContent}</td>`;
+            });
             html += '</tr>';
           }
         });
@@ -820,7 +848,11 @@
 
     .table-wrapper {
       overflow-x: auto;
-      margin: 8px 0;
+      margin: 10px 0;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-medium);
+      background-color: #0b111e;
+      -webkit-overflow-scrolling: touch;
     }
 
     .msg-bubble table {
@@ -829,15 +861,38 @@
       font-size: 12px;
     }
 
-    .msg-bubble th, .msg-bubble td {
-      border: 1px solid var(--border-medium);
-      padding: 6px 8px;
-      text-align: left;
-    }
-
     .msg-bubble th {
       background-color: var(--bg-card);
+      color: var(--text-primary);
+      padding: 8px 10px;
+      font-weight: 600;
+      border-bottom: 1px solid var(--border-medium);
+      white-space: nowrap;
     }
+
+    .msg-bubble td {
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 6px 10px;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    .msg-bubble tr:hover td {
+      background-color: rgba(59, 130, 246, 0.05);
+    }
+
+    .kpi-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 10.5px;
+      font-weight: 600;
+      font-family: var(--font-mono);
+    }
+    .kpi-up { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+    .kpi-down { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
 
     /* Streaming Cursor */
     .cursor-caret {

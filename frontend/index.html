@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Interfaz moderna para el Chatbot de IA y Gateway Multi-Agente con streaming en tiempo real.">
-  <title>AI Agent Gateway | Chatbot</title>
+  <meta name="description" content="Interfaz moderna para el Chatbot de IA y Gateway Multi-Agente con streaming en tiempo real y módulo de Analytics Corporativo.">
+  <title>AI Agent Gateway | Chatbot & Analytics</title>
   
   <!-- Google Fonts: Inter & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -17,7 +17,7 @@
 <body>
   <div class="app-container" id="app">
     
-    <!-- Top Navigation Header -->
+    <!-- Top Navigation Header with Tabs -->
     <header class="app-header" id="app-header">
       <div class="header-left">
         <div class="brand">
@@ -35,10 +35,33 @@
         </div>
       </div>
 
-      <!-- Agent Switcher Selector -->
+      <!-- Center: Dedicated Navigation Tabs for Specialized Chats -->
       <div class="header-center">
-        <div class="agent-selector-wrapper">
-          <label for="agent-select-container" class="sr-only">Seleccionar Agente</label>
+        <nav class="nav-tabs" id="nav-tabs" role="tablist" aria-label="Selector de Agentes y Chats">
+          <button type="button" class="nav-tab active" data-agent="portfolio" role="tab" aria-selected="true" id="tab-portfolio">
+            <span class="nav-tab-icon">💼</span>
+            <span class="nav-tab-text">Portfolio</span>
+          </button>
+          
+          <button type="button" class="nav-tab" data-agent="ecommerce" role="tab" aria-selected="false" id="tab-ecommerce">
+            <span class="nav-tab-icon">🛍️</span>
+            <span class="nav-tab-text">E-Commerce Chat</span>
+          </button>
+          
+          <button type="button" class="nav-tab nav-tab-analytics" data-agent="analytics" role="tab" aria-selected="false" id="tab-analytics">
+            <span class="nav-tab-icon">📊</span>
+            <span class="nav-tab-text">Analytics Corporativo</span>
+            <span class="tab-badge-highlight">KPIs</span>
+          </button>
+          
+          <button type="button" class="nav-tab" data-agent="general" role="tab" aria-selected="false" id="tab-general">
+            <span class="nav-tab-icon">⚡</span>
+            <span class="nav-tab-text">General</span>
+          </button>
+        </nav>
+
+        <!-- Mobile / Fallback Dropdown Selector -->
+        <div class="agent-selector-wrapper mobile-only">
           <div class="custom-select" id="agent-select-container">
             <div class="select-trigger" id="agent-trigger" tabindex="0" role="combobox" aria-haspopup="listbox" aria-expanded="false">
               <span class="agent-icon-badge" id="active-agent-icon">💼</span>
@@ -69,7 +92,7 @@
                 <span class="option-icon">📊</span>
                 <div class="option-content">
                   <span class="option-title">Analytics Agent</span>
-                  <span class="option-desc">Métricas de negocio, KPIs e informes</span>
+                  <span class="option-desc">Métricas corporativas, KPIs e informes</span>
                 </div>
               </div>
               <div class="option-item" data-agent="general" role="option" aria-selected="false">
@@ -84,7 +107,7 @@
         </div>
       </div>
 
-      <!-- Connection Status & Header Actions -->
+      <!-- Right: Connection Status & Global Actions -->
       <div class="header-right">
         <!-- Live Connection Status Badge -->
         <div class="status-badge" id="connection-status-badge" title="Estado de conexión con el backend de FastAPI">
@@ -94,7 +117,7 @@
 
         <!-- Action Buttons -->
         <div class="header-actions">
-          <button type="button" class="btn-icon" id="btn-new-chat" title="Nueva Conversación" aria-label="Iniciar nueva conversación">
+          <button type="button" class="btn-icon" id="btn-new-chat" title="Nueva Conversación / Reiniciar Sesión" aria-label="Iniciar nueva conversación">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M12 5v14M5 12h14"/>
             </svg>
@@ -108,7 +131,7 @@
             <span class="btn-tooltip">Exportar</span>
           </button>
 
-          <button type="button" class="btn-icon" id="btn-open-settings" title="Configuración de Conexión" aria-label="Abrir configuración">
+          <button type="button" class="btn-icon" id="btn-open-settings" title="Configuración del Gateway" aria-label="Abrir configuración">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
               <circle cx="12" cy="12" r="3"/>
@@ -118,6 +141,85 @@
         </div>
       </div>
     </header>
+
+    <!-- Subheader: Live Performance Metrics & Quick Analytics Bar -->
+    <div class="metrics-bar" id="metrics-bar">
+      <div class="metrics-container">
+        <!-- Live Performance Indicators -->
+        <div class="metrics-group">
+          <div class="metric-chip" id="chip-latency" title="Latencia / Tiempo de respuesta TTFT">
+            <span class="metric-icon">⚡</span>
+            <span class="metric-title">Latencia:</span>
+            <span class="metric-value" id="metric-latency">-- ms</span>
+          </div>
+
+          <div class="metric-chip" id="chip-tokens" title="Tokens acumulados en la respuesta">
+            <span class="metric-icon">🔤</span>
+            <span class="metric-title">Tokens:</span>
+            <span class="metric-value" id="metric-tokens">--</span>
+          </div>
+
+          <div class="metric-chip" id="chip-speed" title="Velocidad de generación de tokens">
+            <span class="metric-icon">🚀</span>
+            <span class="metric-title">Velocidad:</span>
+            <span class="metric-value" id="metric-speed">-- tok/s</span>
+          </div>
+
+          <div class="metric-chip" id="chip-model" title="Modelo de inferencia activo">
+            <span class="metric-icon">🧠</span>
+            <span class="metric-title">Modelo:</span>
+            <span class="metric-value font-mono" id="metric-model">gemini-2.0-flash</span>
+          </div>
+
+          <div class="metric-chip" id="chip-stream-status" title="Estado de transmisión SSE en tiempo real">
+            <span class="sse-pulse-dot" id="sse-pulse-dot"></span>
+            <span class="metric-title">SSE:</span>
+            <span class="metric-value" id="metric-sse-status">Conectado</span>
+          </div>
+        </div>
+
+        <!-- Quick Conversation Actions -->
+        <div class="metrics-actions">
+          <button type="button" class="btn-metrics-action" id="btn-quick-reset" title="Reiniciar sesión y limpiar conversación">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+              <path d="M3 3v5h5"/>
+            </svg>
+            <span>Reiniciar Chat</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Analytics Corporativo Quick Actions Bar (Contextual) -->
+    <div class="analytics-quick-strip" id="analytics-quick-strip">
+      <div class="quick-strip-container">
+        <span class="quick-strip-label">
+          <span class="pulse-icon">📊</span>
+          <span>Consultas de Negocio:</span>
+        </span>
+        <div class="quick-chips-row" id="quick-analytics-chips">
+          <button type="button" class="analytics-pill" data-prompt="Genera un resumen ejecutivo de ventas, ingresos totales y productos más vendidos del último trimestre en formato tabla.">
+            📈 Resumen de Ventas
+          </button>
+          <button type="button" class="analytics-pill" data-prompt="Muestra el desglose de tráfico web, usuarios activos diarios (DAU), mensuales (MAU) y duración promedio de sesión en una tabla de KPIs.">
+            👥 Tráfico y Usuarios
+          </button>
+          <button type="button" class="analytics-pill" data-prompt="Analiza el embudo de conversión paso a paso (Visitas -> Registro -> Carrito -> Compra) con tasas de abandono y oportunidades de mejora.">
+            🎯 Embudo de Conversión
+          </button>
+          <button type="button" class="analytics-pill" data-prompt="Genera una tabla comparativa con los KPIs mensuales clave: MRR, CAC, LTV, Churn Rate y Tasa de Retención con variaciones porcentuales.">
+            📊 KPIs Mensuales
+          </button>
+          <button type="button" class="analytics-pill" data-prompt="Muestra un informe de latencia de API (p50, p95, p99), tiempo de respuesta TTFT y tasa de aciertos de caché en Redis del microservicio.">
+            📉 Latencia & Rendimiento
+          </button>
+          <button type="button" class="analytics-pill" data-prompt="Calcula el Retorno de Inversión (ROI) y Costo por Adquisición (CPA) detallado por canal publicitario en una tabla estructurada.">
+            💰 ROI & Inversión
+          </button>
+        </div>
+      </div>
+    </div>
 
     <!-- Main Chat Workspace -->
     <main class="chat-main">

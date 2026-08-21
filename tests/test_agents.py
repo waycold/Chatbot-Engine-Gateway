@@ -3,6 +3,7 @@ from typing import AsyncGenerator
 import pytest
 from app.agents.base import BaseAgent
 from app.agents.dispatcher import AgentDispatcher
+from app.agents.ecommerce import EcommerceAgent
 from app.schemas.payload import ChatRequest, ChatResponse
 
 
@@ -98,6 +99,44 @@ class TestBaseAgent:
         """Verifies that a properly implemented agent sets agent_id correctly."""
         agent = MockPortfolioAgent(agent_id="custom_portfolio")
         assert agent.agent_id == "custom_portfolio"
+
+
+# ==============================================================================
+# Ecommerce Agent Product Extraction Tests (Ticket BE-02)
+# ==============================================================================
+
+class TestEcommerceProductExtraction:
+    """Test suite for Ticket BE-02: Product extraction and conversational search."""
+
+    def test_extract_search_terms_quoted_product(self) -> None:
+        """Verifies extraction of product names inside quotes and stripped price tags."""
+        agent = EcommerceAgent()
+        msg = 'Hola, me interesa el producto "Servicio Cloud AI" ($49.99)...'
+        terms = agent.extract_search_terms(msg)
+        assert len(terms) > 0
+        assert terms[0] == "Servicio Cloud AI"
+
+    def test_extract_search_terms_pattern_match(self) -> None:
+        """Verifies extraction when user uses phrase 'producto ...' without quotes."""
+        agent = EcommerceAgent()
+        msg = "Quisiera consultar disponibilidad del producto Curso Avanzado de FastAPI y Microservicios"
+        terms = agent.extract_search_terms(msg)
+        assert len(terms) > 0
+        assert any("Curso Avanzado de FastAPI" in t for t in terms)
+
+    @pytest.mark.asyncio
+    async def test_ecommerce_context_augmentation_with_button_format(self) -> None:
+        """Verifies that button-formatted frontend message retrieves grounding catalog items."""
+        agent = EcommerceAgent()
+        req = ChatRequest(
+            agent_id="ecommerce",
+            session_id="sess_ecom_01",
+            message='Hola, me interesa el producto "Consultoría DevOps" ($120.00)...',
+        )
+        context = await agent.get_context_augmentation(req)
+        assert context is not None
+        assert "Matching Catalog Products" in context
+        assert "Consultoría DevOps" in context
 
 
 # ==============================================================================

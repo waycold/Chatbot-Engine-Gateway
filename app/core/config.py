@@ -21,7 +21,7 @@ class Settings(BaseSettings):
 
     # --- LLM & AI Engine (Google GenAI Studio / Gemini API) ---
     GEMINI_API_KEY: str = Field(
-        ...,
+        default="",
         description="Google AI Studio / Gemini API Key for google-genai client authentication",
     )
     DEFAULT_MODEL: str = Field(
@@ -96,12 +96,24 @@ class Settings(BaseSettings):
             return [origin.strip().rstrip("/") for origin in value.split(",") if origin.strip()]
         elif isinstance(value, (list, tuple)):
             return [str(origin).rstrip("/") for origin in value]
-        return []
+    @field_validator("GEMINI_API_KEY", mode="before")
+    @classmethod
+    def clean_gemini_api_key(cls, value: Any) -> str:
+        """Sanitizes quotes/whitespace and checks alternative env var names."""
+        import os
+        val_str = str(value or "").strip().strip("'").strip('"').strip()
+        if not val_str:
+            val_str = (
+                os.environ.get("GOOGLE_API_KEY", "")
+                or os.environ.get("GEMINI_KEY", "")
+                or os.environ.get("GOOGLE_GENAI_API_KEY", "")
+            ).strip().strip("'").strip('"').strip()
+        return val_str
 
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
-        case_sensitive=True,
+        case_sensitive=False,
         extra="ignore",
     )
 

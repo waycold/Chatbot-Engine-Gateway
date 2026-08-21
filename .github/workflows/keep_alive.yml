@@ -37,7 +37,7 @@ jobs:
       - name: Execute Keep-Alive Ping
         id: ping
         env:
-          DEFAULT_URL: ${{ secrets.GATEWAY_URL || vars.GATEWAY_URL || 'https://ai-agent-gateway.onrender.com' }}
+          DEFAULT_URL: ${{ secrets.GATEWAY_URL || vars.GATEWAY_URL || 'https://ai-agent-gateway-sued.onrender.com' }}
           INPUT_URL: ${{ github.event.inputs.gateway_url }}
           ENDPOINT: ${{ github.event.inputs.endpoint || '/health' }}
         run: |

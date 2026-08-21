@@ -29,7 +29,7 @@ Esta guía detalla el procedimiento completo para desplegar el microservicio **C
 │ RENDER CLUSTER (Oregon / Global Edge Proxy)                                       │
 │                                                                                   │
 │   ┌───────────────────────────────────────────────────────────────────────────┐   │
-│   │ Web Service: ai-agent-gateway (Docker Multi-Stage Container)               │   │
+│   │ Web Service: ai-agent-gateway (Docker Multi-Stage Container)              │   │
 │   │                                                                           │   │
 │   │   • Non-Root User (appuser:1000)                                          │   │
 │   │   • FastAPI + Uvicorn (timeout-keep-alive: 65s)                           │   │

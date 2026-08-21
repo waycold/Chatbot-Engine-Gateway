@@ -88,6 +88,14 @@ class TestDjangoAPIService:
         assert data["results"][0]["name"] == "Servicio Cloud AI"
 
     @pytest.mark.asyncio
+    async def test_django_api_service_search_catalog_scoring(self) -> None:
+        """Verifies search_catalog token scoring and match prioritization."""
+        service = DjangoAPIService()
+        results = await service.search_catalog(query="DevOps", limit=3)
+        assert len(results) > 0
+        assert "DevOps" in results[0]["name"] or "DevOps" in results[0]["description"]
+
+    @pytest.mark.asyncio
     async def test_django_api_service_timeout_handling(self) -> None:
         """Verifies error handling when Django backend times out."""
         service = DjangoAPIService()
@@ -118,6 +126,27 @@ class TestLLMClientService:
         """Verifies initialization with explicit API Key."""
         service = LLMClientService(api_key="custom-gemini-key-999")
         assert service.api_key == "custom-gemini-key-999"
+
+    def test_llm_client_candidate_models_fallback_order(self) -> None:
+        """Verifies ordered list of candidate models for fallback."""
+        service = LLMClientService()
+        models = service._get_candidate_models("gemini-custom")
+        assert models[0] == "gemini-custom"
+        assert "gemini-2.5-flash" in models
+        assert "gemini-2.0-flash" in models
+
+    def test_llm_client_fallback_distinguishes_missing_key_vs_configured_key(self) -> None:
+        """Verifies that fallback message does not falsely claim unconfigured key when key is set."""
+        # Unconfigured key scenario
+        unconfigured_service = LLMClientService(api_key="your-google-ai-studio-api-key-here")
+        resp_unconf = unconfigured_service._generate_fallback_response("Hola")
+        assert "Configura GEMINI_API_KEY" in resp_unconf
+
+        # Configured key with error scenario
+        configured_service = LLMClientService(api_key="AIzaSyA1234567890abcdefghijklmnopqrstuv")
+        resp_conf = configured_service._generate_fallback_response("Hola", error_context=Exception("503 Overloaded"))
+        assert "Configura GEMINI_API_KEY" not in resp_conf
+        assert "modo de contingencia temporal" in resp_conf
 
     @pytest.mark.asyncio
     async def test_llm_client_mock_completion(self, mock_genai_client: MagicMock) -> None:
