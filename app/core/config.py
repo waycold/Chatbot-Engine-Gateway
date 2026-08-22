@@ -25,7 +25,7 @@ class Settings(BaseSettings):
         description="Google AI Studio / Gemini API Key for google-genai client authentication",
     )
     DEFAULT_MODEL: str = Field(
-        default="gemini-3.7-flash",
+        default="gemini-3.5-flash-lite",
         description="Default Gemini LLM model identifier for inference",
     )
     LLM_TIMEOUT_SECONDS: float = Field(

@@ -101,8 +101,9 @@ class LLMClientService:
         target = primary_model or self.default_model
         fallback_order = [
             target,
-            "gemini-3.7-flash",
             "gemini-3.5-flash-lite",
+            "gemini-3.6-flash",
+            "gemini-3.7-flash",
         ]
         # Deduplicate while preserving order
         seen = set()
@@ -149,16 +150,18 @@ class LLMClientService:
         max_output_tokens: Optional[int] = None,
         tools: Optional[list[Any]] = None,
         tool_config: Optional[Any] = None,
+        thinking_budget: Optional[int] = None,
     ) -> Any:
         """Builds types.GenerateContentConfig if SDK is available, else returns dict."""
         if GENAI_AVAILABLE and types is not None:
             config_kwargs: dict[str, Any] = {
                 "temperature": temperature,
             }
-            if hasattr(types, "ThinkingConfig"):
-                config_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
-            elif hasattr(types, "GenerateContentConfig"):
-                config_kwargs["thinking_config"] = {"thinking_budget": 0}
+            if thinking_budget is not None and thinking_budget > 0:
+                if hasattr(types, "ThinkingConfig"):
+                    config_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=thinking_budget)
+                elif hasattr(types, "GenerateContentConfig"):
+                    config_kwargs["thinking_config"] = {"thinking_budget": thinking_budget}
             if system_instruction:
                 config_kwargs["system_instruction"] = system_instruction
             if max_output_tokens:
