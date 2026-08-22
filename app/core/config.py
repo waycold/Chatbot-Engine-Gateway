@@ -50,6 +50,12 @@ class Settings(BaseSettings):
     )
 
 
+    # --- Knowledge Base & Business Context ---
+    ECOMMERCE_CONTEXT_PATH: str = Field(
+        default="data/ecommerce_business_context.md",
+        description="Path to Markdown business context file",
+    )
+
     # --- Distributed Cache & Agent State Memory ---
     REDIS_URL: str = Field(
         default="redis://localhost:6379/0",

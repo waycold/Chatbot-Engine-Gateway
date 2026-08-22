@@ -1,10 +1,14 @@
-"""Ecommerce Specialized Agent implementation with smart product extraction and robust catalog grounding."""
+"""Ecommerce Specialized Agent implementation with smart product extraction, Markdown knowledge grounding, and live catalog search."""
 import json
 import logging
 import re
 from typing import AsyncGenerator, Optional
 from app.agents.base import BaseAgent
 from app.schemas.payload import ChatRequest, ChatResponse
+from app.services.django_api import DjangoAPIService
+from app.services.knowledge_base import KnowledgeBaseService, get_knowledge_base_service
+from app.services.llm_client import LLMClientService
+from app.services.memory import RedisMemoryService
 
 logger = logging.getLogger("ai_gateway.agent.ecommerce")
 
@@ -25,23 +29,34 @@ STOPWORDS = {
 
 class EcommerceAgent(BaseAgent):
     """Specialized AI Agent for product catalog inquiries, stock availability,
-
-    pricing, product recommendations, and e-commerce guidance.
+    pricing, business policies (returns, warranties, shipping, payments), and e-commerce guidance.
     """
 
-    def __init__(self, agent_id: str = "ecommerce") -> None:
+    def __init__(
+        self,
+        agent_id: str = "ecommerce",
+        llm_service: Optional[LLMClientService] = None,
+        memory_service: Optional[RedisMemoryService] = None,
+        django_service: Optional[DjangoAPIService] = None,
+        knowledge_base_service: Optional[KnowledgeBaseService] = None,
+    ) -> None:
         super().__init__(
             agent_id=agent_id,
             name="E-Commerce & Catalog Agent",
-            description="Responde sobre catálogo de productos, precios, disponibilidad y recomendaciones comerciales.",
+            description="Responde sobre catálogo de productos, precios, disponibilidad, políticas de compra, envíos y reembolsos.",
             capabilities=[
                 "product_search",
                 "price_inquiry",
                 "stock_check",
                 "product_recommendation",
                 "purchase_guidance",
+                "business_policies",
             ],
+            llm_service=llm_service,
+            memory_service=memory_service,
+            django_service=django_service,
         )
+        self.knowledge_base_service = knowledge_base_service or get_knowledge_base_service()
 
     def extract_search_terms(self, message: str) -> list[str]:
         """Extracts candidate product names and keywords from conversational user queries.
@@ -93,18 +108,30 @@ class EcommerceAgent(BaseAgent):
     async def get_system_instruction(self, request: ChatRequest) -> str:
         """Returns specialized persona and constraints for the E-Commerce Agent."""
         return (
-            "Eres el Asistente Experto de E-Commerce y Catálogo de Productos. "
+            "Eres el Asistente Experto de E-Commerce, Catálogo y Políticas Comerciales. "
             "Tu misión es ayudar a los clientes a encontrar productos, resolver dudas sobre especificaciones, "
-            "precios, disponibilidad en stock y guiarles en su decisión de compra.\n\n"
+            "precios, disponibilidad en stock, políticas de envío, garantías, devoluciones y métodos de pago.\n\n"
             "Pautas de respuesta:\n"
-            "1. Utiliza la información provista en la sección [Context / Grounding Data] para responder con precisión sobre nombres, precios, monedas y disponibilidad.\n"
-            "2. Sé servicial, dinámico y presenta los productos de forma estructurada con viñetas claras, destacando el nombre, precio y características principales.\n"
-            "3. Si el usuario pregunta por un producto específico, proporciona su detalle completo. Si no coincide exactamente, presenta las opciones más afines del catálogo.\n"
-            "4. Responde siempre en el idioma del usuario (español por defecto)."
+            "1. Utiliza la sección [Live Catalog / Database Grounding] para responder con precisión sobre nombres de productos, precios, monedas y stock en tiempo real.\n"
+            "2. Utiliza la sección [Business Context & Policies] para responder sobre plazos de entrega, métodos de pago aceptados, descuentos, garantías de satisfacción (14 días), reembolsos y datos de contacto.\n"
+            "3. Cuando el usuario pregunte por un producto y sus condiciones de compra o devolución, combina ambas fuentes de forma armónica y estructurada.\n"
+            "4. Sé servicial, dinámico y presenta los productos con viñetas claras destacando nombre, precio y disponibilidad.\n"
+            "5. Responde siempre en el idioma del usuario (español por defecto)."
         )
 
     async def get_context_augmentation(self, request: ChatRequest) -> Optional[str]:
-        """Queries catalog via Django API with smart product extraction and multi-stage fallback."""
+        """Loads Markdown business context and queries live Django database catalog."""
+        context_blocks: list[str] = []
+
+        # 1. Load Business Context & Policies from Markdown knowledge base
+        try:
+            business_context = await self.knowledge_base_service.get_ecommerce_context()
+            if business_context:
+                context_blocks.append(f"[Business Context & Policies]:\n{business_context}")
+        except Exception as exc:
+            logger.warning("Error loading business context from knowledge base: %s", exc)
+
+        # 2. Query Live Catalog from Django database/API
         try:
             search_candidates = self.extract_search_terms(request.message)
             products: list[dict] = []
@@ -126,14 +153,19 @@ class EcommerceAgent(BaseAgent):
                 logger.info("No direct catalog match; fetching representative catalog for grounding.")
                 products = await self.django_service.search_catalog(query=None, limit=6)
 
-            if not products:
-                return "No products currently available in the catalog."
-
-            return f"Matching Catalog Products:\n{json.dumps(products, ensure_ascii=False, indent=2)}"
+            if products:
+                catalog_json = json.dumps(products, ensure_ascii=False, indent=2)
+                context_blocks.append(f"[Live Catalog / Database Grounding]:\n{catalog_json}")
+            else:
+                context_blocks.append("[Live Catalog / Database Grounding]:\nNo products currently available in catalog.")
 
         except Exception as exc:
             logger.warning("Error fetching e-commerce catalog context: %s", exc)
+
+        if not context_blocks:
             return None
+
+        return "\n\n".join(context_blocks)
 
     async def process(self, request: ChatRequest) -> ChatResponse:
         """Processes a chat request and returns a complete response."""

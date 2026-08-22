@@ -1,4 +1,4 @@
-"""Unit and Integration tests for Gateway Services (Django API, LLM Client, Redis Memory, and Security)."""
+"""Unit and Integration tests for Gateway Services (Django API, LLM Client, Redis Memory, Knowledge Base, and Security)."""
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
@@ -6,6 +6,7 @@ from fastapi import HTTPException, status
 import httpx
 from app.core.security import verify_internal_api_secret
 from app.services.django_api import DjangoAPIService
+from app.services.knowledge_base import KnowledgeBaseService
 from app.services.llm_client import LLMClientService
 from app.services.memory import RedisMemoryService
 from tests.conftest import MockGenAIChunk, MockGenAIResponse, MockRedisBackend
@@ -40,6 +41,39 @@ class TestSecurityService:
             await verify_internal_api_secret(x_internal_secret="wrong-secret-token")
         assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
         assert "Invalid or missing" in exc_info.value.detail
+
+
+# ==============================================================================
+# Knowledge Base Service Tests (Ticket BE-04)
+# ==============================================================================
+
+class TestKnowledgeBaseService:
+    """Test suite for KnowledgeBaseService Markdown loading and caching."""
+
+    @pytest.mark.asyncio
+    async def test_load_existing_markdown_file(self) -> None:
+        """Verifies loading the template ecommerce_business_context.md file."""
+        service = KnowledgeBaseService()
+        content = await service.get_ecommerce_context()
+        assert len(content) > 100
+        assert "Base de Conocimiento" in content or "Políticas" in content or "Envíos" in content
+
+    @pytest.mark.asyncio
+    async def test_load_non_existent_file_returns_fallback(self) -> None:
+        """Verifies that a missing file path returns structured fallback context."""
+        service = KnowledgeBaseService(default_ecommerce_path="data/non_existent_file_123.md")
+        content = await service.get_ecommerce_context()
+        assert "Información de Negocio y Políticas (Fallback)" in content
+        assert "AI Solutions & E-Commerce Store" in content
+
+    @pytest.mark.asyncio
+    async def test_knowledge_base_caching(self) -> None:
+        """Verifies in-memory caching across consecutive loads."""
+        service = KnowledgeBaseService()
+        service.clear_cache()
+        content1 = await service.get_ecommerce_context()
+        content2 = await service.get_ecommerce_context()
+        assert content1 == content2
 
 
 # ==============================================================================
@@ -259,3 +293,81 @@ class TestRedisMemoryService:
         with pytest.raises(ConnectionError) as exc_info:
             await service._redis_client.get("test_key")
         assert "Redis connection refused" in str(exc_info.value)
+
+
+# ==============================================================================
+# Knowledge Base Service Tests (Ticket QA-03 / BE-04)
+# ==============================================================================
+
+class TestKnowledgeBaseService:
+    """Test suite for Markdown Knowledge Base loading, caching, and fallback."""
+
+    def test_knowledge_base_default_init(self) -> None:
+        """Verifies KnowledgeBaseService initialization with default configuration."""
+        service = KnowledgeBaseService()
+        assert service.ecommerce_path == "data/ecommerce_business_context.md"
+        assert len(service._cache) == 0
+
+    def test_knowledge_base_custom_init(self) -> None:
+        """Verifies KnowledgeBaseService initialization with custom path."""
+        service = KnowledgeBaseService(default_ecommerce_path="custom/path/context.md")
+        assert service.ecommerce_path == "custom/path/context.md"
+
+    @pytest.mark.asyncio
+    async def test_knowledge_base_load_existing_markdown_file(self) -> None:
+        """Verifies loading official business context Markdown file from disk."""
+        service = KnowledgeBaseService(default_ecommerce_path="data/ecommerce_business_context.md")
+        content = await service.get_ecommerce_context()
+
+        assert content is not None
+        assert len(content) > 100
+        assert "Políticas de Devolución" in content or "Garantía de Satisfacción" in content
+        assert "Envíos y Entregas" in content
+        assert "Métodos de Pago" in content
+
+    @pytest.mark.asyncio
+    async def test_knowledge_base_caching_and_ttl(self) -> None:
+        """Verifies that loaded Markdown content is cached in-memory."""
+        service = KnowledgeBaseService(default_ecommerce_path="data/ecommerce_business_context.md")
+        service.clear_cache()
+        assert len(service._cache) == 0
+
+        # First call loads from disk and populates cache
+        content1 = await service.get_ecommerce_context()
+        assert len(service._cache) == 1
+        assert "data/ecommerce_business_context.md" in service._cache
+
+        # Second call should retrieve directly from cache
+        content2 = await service.get_ecommerce_context()
+        assert content1 == content2
+
+        # Clear cache
+        service.clear_cache()
+        assert len(service._cache) == 0
+
+    @pytest.mark.asyncio
+    async def test_knowledge_base_fallback_when_file_not_found(self) -> None:
+        """Verifies that missing Markdown file safely returns default fallback context."""
+        service = KnowledgeBaseService(default_ecommerce_path="data/non_existent_file_9999.md")
+        content = await service.get_ecommerce_context()
+
+        assert content is not None
+        assert "Información de Negocio y Políticas (Fallback)" in content
+        assert "Garantías:" in content or "14 días" in content
+        assert "Métodos de Pago:" in content
+
+    @pytest.mark.asyncio
+    async def test_knowledge_base_fallback_on_read_error(self) -> None:
+        """Verifies that disk I/O errors gracefully degrade to fallback context."""
+        service = KnowledgeBaseService(default_ecommerce_path="data/corrupted_file.md")
+        with patch.object(service, "_sync_read_file", return_value=(None, 0.0)):
+            content = await service.get_ecommerce_context()
+            assert "Información de Negocio y Políticas (Fallback)" in content
+
+    def test_get_knowledge_base_service_singleton(self) -> None:
+        """Verifies singleton getter returns consistent instance."""
+        from app.services.knowledge_base import get_knowledge_base_service
+        s1 = get_knowledge_base_service()
+        s2 = get_knowledge_base_service()
+        assert s1 is s2
+

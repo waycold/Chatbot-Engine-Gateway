@@ -5,6 +5,7 @@ from app.agents.base import BaseAgent
 from app.agents.dispatcher import AgentDispatcher
 from app.agents.ecommerce import EcommerceAgent
 from app.schemas.payload import ChatRequest, ChatResponse
+from app.services.knowledge_base import KnowledgeBaseService
 
 
 # ==============================================================================
@@ -102,11 +103,11 @@ class TestBaseAgent:
 
 
 # ==============================================================================
-# Ecommerce Agent Product Extraction Tests (Ticket BE-02)
+# Ecommerce Agent Product Extraction & Hybrid Context Tests (Ticket BE-02 & BE-04)
 # ==============================================================================
 
-class TestEcommerceProductExtraction:
-    """Test suite for Ticket BE-02: Product extraction and conversational search."""
+class TestEcommerceProductExtractionAndHybridContext:
+    """Test suite for Ticket BE-02, BE-04 & QA-03: Product extraction, policies & hybrid context."""
 
     def test_extract_search_terms_quoted_product(self) -> None:
         """Verifies extraction of product names inside quotes and stripped price tags."""
@@ -124,19 +125,97 @@ class TestEcommerceProductExtraction:
         assert len(terms) > 0
         assert any("Curso Avanzado de FastAPI" in t for t in terms)
 
+    def test_extract_search_terms_meaningful_tokens(self) -> None:
+        """Verifies extraction of tokenized keywords when no patterns or quotes match."""
+        agent = EcommerceAgent()
+        msg = "Buenas tardes, ¿tienen servidores cloud disponibles?"
+        terms = agent.extract_search_terms(msg)
+        assert len(terms) > 0
+        assert any("servidores" in t.lower() or "cloud" in t.lower() for t in terms)
+
     @pytest.mark.asyncio
-    async def test_ecommerce_context_augmentation_with_button_format(self) -> None:
-        """Verifies that button-formatted frontend message retrieves grounding catalog items."""
+    async def test_ecommerce_context_augmentation_with_hybrid_grounding(self) -> None:
+        """Verifies that context augmentation generates structured hybrid context (Business Context + Database Grounding)."""
         agent = EcommerceAgent()
         req = ChatRequest(
             agent_id="ecommerce",
             session_id="sess_ecom_01",
-            message='Hola, me interesa el producto "Consultoría DevOps" ($120.00)...',
+            message='Hola, me interesa el producto "Consultoría DevOps" ($120.00)... ¿Cuáles son las políticas de devolución?',
         )
         context = await agent.get_context_augmentation(req)
         assert context is not None
-        assert "Matching Catalog Products" in context
+        # Verify both sections are present
+        assert "Business Context & Policies" in context
+        assert "Live Catalog / Database Grounding" in context
         assert "Consultoría DevOps" in context
+        assert "Políticas de Devolución" in context or "Garantía de Satisfacción" in context or "14 días" in context
+
+    @pytest.mark.asyncio
+    async def test_ecommerce_context_augmentation_fallback_when_catalog_empty(self) -> None:
+        """Verifies that when database catalog returns empty, business policies are still provided."""
+        agent = EcommerceAgent()
+        # Mock empty catalog return
+        from unittest.mock import AsyncMock
+        mock_django = AsyncMock()
+        mock_django.search_catalog = AsyncMock(return_value=[])
+        agent.django_service = mock_django
+
+        req = ChatRequest(
+            agent_id="ecommerce",
+            session_id="sess_ecom_02",
+            message="¿Qué métodos de pago y financiación aceptan?",
+        )
+        context = await agent.get_context_augmentation(req)
+        assert context is not None
+        assert "Business Context & Policies" in context
+        assert "No products currently available" in context
+        assert "Métodos de Pago" in context or "Tarjetas" in context
+
+    @pytest.mark.asyncio
+    async def test_ecommerce_context_augmentation_fallback_when_kb_missing(self) -> None:
+        """Verifies that when knowledge file is missing, fallback business context is used."""
+        missing_kb_service = KnowledgeBaseService(default_ecommerce_path="data/missing_context_file.md")
+        agent = EcommerceAgent(knowledge_base_service=missing_kb_service)
+
+        req = ChatRequest(
+            agent_id="ecommerce",
+            session_id="sess_ecom_03",
+            message="¿Cómo funcionan las garantías de los productos?",
+        )
+        context = await agent.get_context_augmentation(req)
+        assert context is not None
+        assert "Business Context & Policies" in context
+        assert "Información de Negocio y Políticas (Fallback)" in context
+        assert "14 días" in context or "Garantías" in context
+
+    @pytest.mark.asyncio
+    async def test_ecommerce_system_instruction_mentions_both_policies_and_catalog(self) -> None:
+        """Verifies that EcommerceAgent system instruction incorporates guidelines for both knowledge sources."""
+        agent = EcommerceAgent()
+        req = ChatRequest(agent_id="ecommerce", session_id="sess_ecom_04", message="Hola")
+        instruction = await agent.get_system_instruction(req)
+        assert "Live Catalog / Database Grounding" in instruction
+        assert "Business Context & Policies" in instruction
+        assert "14 días" in instruction or "garantías" in instruction.lower()
+
+    @pytest.mark.asyncio
+    async def test_ecommerce_hybrid_conversation_contents(self) -> None:
+        """Verifies that build_conversation_contents formats the hybrid context correctly into the prompt."""
+        agent = EcommerceAgent()
+        req = ChatRequest(
+            agent_id="ecommerce",
+            session_id="sess_ecom_05",
+            message='¿Cuánto cuesta el "Servicio Cloud AI" y cómo se realiza el envío?',
+        )
+        contents = await agent.build_conversation_contents(req)
+        assert len(contents) >= 1
+        user_msg = contents[-1]["parts"][0]["text"]
+        assert "[Context / Grounding Data]:" in user_msg
+        assert "Business Context & Policies" in user_msg
+        assert "Live Catalog / Database Grounding" in user_msg
+        assert "[User Query]:" in user_msg
+        assert req.message in user_msg
+
 
 
 # ==============================================================================
