@@ -49,8 +49,9 @@ RUN groupadd -g 1000 appgroup && \
 # Copy virtual environment from builder stage
 COPY --from=builder /opt/venv /opt/venv
 
-# Copy application source code and deployment scripts
+# Copy application source code, business knowledge base, and deployment scripts
 COPY --chown=appuser:appgroup app /app/app
+COPY --chown=appuser:appgroup data /app/data
 COPY --chown=appuser:appgroup scripts /app/scripts
 
 # Grant execution permissions to entrypoint scripts

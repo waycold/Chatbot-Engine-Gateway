@@ -41,6 +41,9 @@ coverage.xml
 docs/
 *.md
 !README.md
+!data/
+!data/*.md
+!data/**/*.md
 frontend/
 
 # Local Logs & Temporary Files

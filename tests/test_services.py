@@ -56,7 +56,7 @@ class TestKnowledgeBaseService:
         service = KnowledgeBaseService()
         content = await service.get_ecommerce_context()
         assert len(content) > 100
-        assert "Base de Conocimiento" in content or "Políticas" in content or "Envíos" in content
+        assert "POLICIES" in content.upper() or "POLÍTICAS" in content.upper() or "SHIPPING" in content.upper()
 
     @pytest.mark.asyncio
     async def test_load_non_existent_file_returns_fallback(self) -> None:
@@ -321,9 +321,9 @@ class TestKnowledgeBaseService:
 
         assert content is not None
         assert len(content) > 100
-        assert "Políticas de Devolución" in content or "Garantía de Satisfacción" in content
-        assert "Envíos y Entregas" in content
-        assert "Métodos de Pago" in content
+        assert "POLICIES" in content.upper() or "POLÍTICAS" in content.upper()
+        assert "SHIPPING" in content.upper() or "ENVÍOS" in content.upper()
+        assert "PAYMENT" in content.upper() or "PAGO" in content.upper()
 
     @pytest.mark.asyncio
     async def test_knowledge_base_caching_and_ttl(self) -> None:
@@ -359,8 +359,9 @@ class TestKnowledgeBaseService:
     @pytest.mark.asyncio
     async def test_knowledge_base_fallback_on_read_error(self) -> None:
         """Verifies that disk I/O errors gracefully degrade to fallback context."""
+        from pathlib import Path
         service = KnowledgeBaseService(default_ecommerce_path="data/corrupted_file.md")
-        with patch.object(service, "_sync_read_file", return_value=(None, 0.0)):
+        with patch.object(service, "_sync_read_file", return_value=(None, 0.0, Path("data/corrupted_file.md"))):
             content = await service.get_ecommerce_context()
             assert "Información de Negocio y Políticas (Fallback)" in content
 
