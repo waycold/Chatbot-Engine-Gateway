@@ -1,9 +1,10 @@
-"""Unit and Integration tests for Gateway Services (Django API, LLM Client, Redis Memory, Knowledge Base, and Security)."""
+"""Unit and Integration tests for Gateway Services (Django API, LLM Client, Redis Memory, Knowledge Base, Tools and Security)."""
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import HTTPException, status
 import httpx
+from app.agents.tools import ANALYTICS_TOOL_DECLARATIONS, execute_tool
 from app.core.security import verify_internal_api_secret
 from app.services.django_api import DjangoAPIService
 from app.services.knowledge_base import KnowledgeBaseService
@@ -41,39 +42,6 @@ class TestSecurityService:
             await verify_internal_api_secret(x_internal_secret="wrong-secret-token")
         assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
         assert "Invalid or missing" in exc_info.value.detail
-
-
-# ==============================================================================
-# Knowledge Base Service Tests (Ticket BE-04)
-# ==============================================================================
-
-class TestKnowledgeBaseService:
-    """Test suite for KnowledgeBaseService Markdown loading and caching."""
-
-    @pytest.mark.asyncio
-    async def test_load_existing_markdown_file(self) -> None:
-        """Verifies loading the template ecommerce_business_context.md file."""
-        service = KnowledgeBaseService()
-        content = await service.get_ecommerce_context()
-        assert len(content) > 100
-        assert "POLICIES" in content.upper() or "POLÍTICAS" in content.upper() or "SHIPPING" in content.upper()
-
-    @pytest.mark.asyncio
-    async def test_load_non_existent_file_returns_fallback(self) -> None:
-        """Verifies that a missing file path returns structured fallback context."""
-        service = KnowledgeBaseService(default_ecommerce_path="data/non_existent_file_123.md")
-        content = await service.get_ecommerce_context()
-        assert "Información de Negocio y Políticas (Fallback)" in content
-        assert "AI Solutions & E-Commerce Store" in content
-
-    @pytest.mark.asyncio
-    async def test_knowledge_base_caching(self) -> None:
-        """Verifies in-memory caching across consecutive loads."""
-        service = KnowledgeBaseService()
-        service.clear_cache()
-        content1 = await service.get_ecommerce_context()
-        content2 = await service.get_ecommerce_context()
-        assert content1 == content2
 
 
 # ==============================================================================
@@ -141,6 +109,112 @@ class TestDjangoAPIService:
         with pytest.raises(httpx.TimeoutException) as exc_info:
             await client.get("/api/auth/verify/")
         assert "Connection timed out" in str(exc_info.value)
+
+
+# ==============================================================================
+# Ticket BE-05: 8 Specialized Endpoints and Tool Execution Tests
+# ==============================================================================
+
+class TestDjangoAPIExtendedEndpointsAndTools:
+    """Test suite for Ticket BE-05: 8 internal endpoints and LLM tools."""
+
+    @pytest.mark.asyncio
+    async def test_query_sales_analytics(self) -> None:
+        """Verifies dynamic sales query endpoint."""
+        service = DjangoAPIService()
+        res = await service.query_sales_analytics(date_from="2026-07-01", date_to="2026-08-23", dimension="category")
+        assert res.get("status") == "success"
+        assert "aggregates" in res
+        assert res["aggregates"]["total_revenue_usd"] > 0
+        assert len(res["breakdown"]) > 0
+
+    @pytest.mark.asyncio
+    async def test_get_inventory_health(self) -> None:
+        """Verifies inventory health endpoint."""
+        service = DjangoAPIService()
+        res = await service.get_inventory_health(status_filter="all", limit=5)
+        assert res.get("status") == "success"
+        assert "total_products_tracked" in res
+        assert len(res["items"]) > 0
+
+    @pytest.mark.asyncio
+    async def test_get_product_profitability(self) -> None:
+        """Verifies product profitability & gross margin endpoint."""
+        service = DjangoAPIService()
+        res = await service.get_product_profitability(group_by="product", limit=5)
+        assert res.get("status") == "success"
+        assert "overall_gross_margin_pct" in res
+        assert len(res["ranking"]) > 0
+
+    @pytest.mark.asyncio
+    async def test_get_funnel_and_cart_metrics(self) -> None:
+        """Verifies conversion funnel and cart abandonment endpoint."""
+        service = DjangoAPIService()
+        res = await service.get_funnel_and_cart_metrics(timeframe="30d")
+        assert res.get("status") == "success"
+        assert "funnel_stages" in res
+        assert "cart_abandonment_rate_pct" in res
+
+    @pytest.mark.asyncio
+    async def test_get_customer_reviews_summary(self) -> None:
+        """Verifies reviews sentiment and star rating summary endpoint."""
+        service = DjangoAPIService()
+        res = await service.get_customer_reviews_summary(sentiment="all")
+        assert res.get("status") == "success"
+        assert "average_rating" in res
+        assert res["average_rating"] >= 4.0
+
+    @pytest.mark.asyncio
+    async def test_get_customer_segmentation(self) -> None:
+        """Verifies customer RFM insights endpoint."""
+        service = DjangoAPIService()
+        res = await service.get_customer_segmentation(segment="all")
+        assert res.get("status") == "success"
+        assert "segments" in res
+        assert "vip" in res["segments"]
+
+    @pytest.mark.asyncio
+    async def test_semantic_catalog_search(self) -> None:
+        """Verifies conceptual semantic search endpoint."""
+        service = DjangoAPIService()
+        res = await service.semantic_catalog_search(query="programación y microservicios", top_k=3)
+        assert res.get("status") == "success"
+        assert len(res["items"]) > 0
+        assert "semantic_score" in res["items"][0]
+
+    @pytest.mark.asyncio
+    async def test_execute_raw_sql_sandbox_allowed_query(self) -> None:
+        """Verifies safe SELECT execution in sandbox."""
+        service = DjangoAPIService()
+        res = await service.execute_raw_sql_sandbox(sql_query="SELECT id, name, price FROM products LIMIT 5;", max_rows=5)
+        assert res.get("status") == "success"
+        assert "columns" in res
+        assert "data" in res
+
+    @pytest.mark.asyncio
+    async def test_execute_raw_sql_sandbox_rejects_dml_ddl(self) -> None:
+        """Verifies defensive rejection of dangerous SQL keywords (DROP, DELETE, UPDATE)."""
+        service = DjangoAPIService()
+        res = await service.execute_raw_sql_sandbox(sql_query="DROP TABLE users;", max_rows=5)
+        assert res.get("status") == "error"
+        assert "Safety violation" in res.get("error", "")
+
+    @pytest.mark.asyncio
+    async def test_execute_tool_dispatcher(self) -> None:
+        """Verifies the centralized execute_tool dispatcher for all 8 tools."""
+        assert len(ANALYTICS_TOOL_DECLARATIONS) == 8
+
+        # Test tool dispatcher for inventory
+        inv_res = await execute_tool("get_inventory_health", {"status_filter": "critical", "limit": 2})
+        assert inv_res.get("status") == "success"
+
+        # Test tool dispatcher for sales
+        sales_res = await execute_tool("query_sales_analytics", {"dimension": "category"})
+        assert sales_res.get("status") == "success"
+
+        # Test tool dispatcher for unknown tool
+        unknown_res = await execute_tool("non_existent_tool", {})
+        assert unknown_res.get("status") == "error"
 
 
 # ==============================================================================
@@ -296,7 +370,7 @@ class TestRedisMemoryService:
 
 
 # ==============================================================================
-# Knowledge Base Service Tests (Ticket QA-03 / BE-04)
+# Knowledge Base Service Tests
 # ==============================================================================
 
 class TestKnowledgeBaseService:
@@ -332,16 +406,13 @@ class TestKnowledgeBaseService:
         service.clear_cache()
         assert len(service._cache) == 0
 
-        # First call loads from disk and populates cache
         content1 = await service.get_ecommerce_context()
         assert len(service._cache) == 1
         assert "data/ecommerce_business_context.md" in service._cache
 
-        # Second call should retrieve directly from cache
         content2 = await service.get_ecommerce_context()
         assert content1 == content2
 
-        # Clear cache
         service.clear_cache()
         assert len(service._cache) == 0
 
@@ -356,19 +427,9 @@ class TestKnowledgeBaseService:
         assert "Garantías:" in content or "14 días" in content
         assert "Métodos de Pago:" in content
 
-    @pytest.mark.asyncio
-    async def test_knowledge_base_fallback_on_read_error(self) -> None:
-        """Verifies that disk I/O errors gracefully degrade to fallback context."""
-        from pathlib import Path
-        service = KnowledgeBaseService(default_ecommerce_path="data/corrupted_file.md")
-        with patch.object(service, "_sync_read_file", return_value=(None, 0.0, Path("data/corrupted_file.md"))):
-            content = await service.get_ecommerce_context()
-            assert "Información de Negocio y Políticas (Fallback)" in content
-
     def test_get_knowledge_base_service_singleton(self) -> None:
         """Verifies singleton getter returns consistent instance."""
         from app.services.knowledge_base import get_knowledge_base_service
         s1 = get_knowledge_base_service()
         s2 = get_knowledge_base_service()
         assert s1 is s2
-

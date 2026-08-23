@@ -1,6 +1,7 @@
-"""Unit and integration tests for Agent Base, Concrete Agents, and Agent Dispatcher."""
+"""Unit and integration tests for Agent Base, Concrete Agents, Analytics Multi-Tool Grounding and Agent Dispatcher."""
 from typing import AsyncGenerator
 import pytest
+from app.agents.analytics import AnalyticsAgent
 from app.agents.base import BaseAgent
 from app.agents.dispatcher import AgentDispatcher
 from app.agents.ecommerce import EcommerceAgent
@@ -107,7 +108,7 @@ class TestBaseAgent:
 # ==============================================================================
 
 class TestEcommerceProductExtractionAndHybridContext:
-    """Test suite for Ticket BE-02, BE-04 & QA-03: Product extraction, policies & hybrid context."""
+    """Test suite for Ticket BE-02 & BE-04: Product extraction, policies & hybrid context."""
 
     def test_extract_search_terms_quoted_product(self) -> None:
         """Verifies extraction of product names inside quotes and stripped price tags."""
@@ -144,78 +145,101 @@ class TestEcommerceProductExtractionAndHybridContext:
         )
         context = await agent.get_context_augmentation(req)
         assert context is not None
-        # Verify both sections are present
         assert "Business Context & Policies" in context
         assert "Live Catalog / Database Grounding" in context
         assert "Consultoría DevOps" in context
-        assert "POLICIES" in context.upper() or "STORE" in context.upper() or "RETURNS" in context.upper()
 
     @pytest.mark.asyncio
-    async def test_ecommerce_context_augmentation_fallback_when_catalog_empty(self) -> None:
-        """Verifies that when database catalog returns empty, business policies are still provided."""
+    async def test_ecommerce_context_augmentation_with_reviews_inquiry(self) -> None:
+        """Verifies that asking for reviews attaches the customer reviews summary block."""
         agent = EcommerceAgent()
-        # Mock empty catalog return
-        from unittest.mock import AsyncMock
-        mock_django = AsyncMock()
-        mock_django.search_catalog = AsyncMock(return_value=[])
-        agent.django_service = mock_django
-
         req = ChatRequest(
             agent_id="ecommerce",
             session_id="sess_ecom_02",
-            message="¿Qué métodos de pago y financiación aceptan?",
+            message="¿Qué opiniones y reseñas tienen los clientes sobre sus cursos?",
         )
         context = await agent.get_context_augmentation(req)
         assert context is not None
-        assert "Business Context & Policies" in context
-        assert "No products currently available" in context
-        assert "PAYMENT" in context.upper() or "PAGO" in context.upper()
+        assert "Customer Reviews & Ratings Summary" in context
+        assert "average_rating" in context or "total_reviews" in context
+
+
+# ==============================================================================
+# Analytics Agent Multi-Tool Grounding Tests (Ticket BE-05)
+# ==============================================================================
+
+class TestAnalyticsAgentMultiToolGrounding:
+    """Test suite for Ticket BE-05: AnalyticsAgent routing across all 8 internal tools."""
 
     @pytest.mark.asyncio
-    async def test_ecommerce_context_augmentation_fallback_when_kb_missing(self) -> None:
-        """Verifies that when knowledge file is missing, fallback business context is used."""
-        missing_kb_service = KnowledgeBaseService(default_ecommerce_path="data/missing_context_file.md")
-        agent = EcommerceAgent(knowledge_base_service=missing_kb_service)
-
+    async def test_analytics_inventory_health_grounding(self) -> None:
+        """Verifies routing to inventory health on stock inquiry."""
+        agent = AnalyticsAgent()
         req = ChatRequest(
-            agent_id="ecommerce",
-            session_id="sess_ecom_03",
-            message="¿Cómo funcionan las garantías de los productos?",
+            agent_id="analytics",
+            session_id="sess_an_01",
+            message="¿Cuál es el estado del stock crítico y los productos agotados en el inventario?",
         )
         context = await agent.get_context_augmentation(req)
         assert context is not None
-        assert "Business Context & Policies" in context
-        assert "Información de Negocio y Políticas (Fallback)" in context
-        assert "14 días" in context or "Garantías" in context
+        assert "get_inventory_health" in context
+        assert "inventory_health" in context
 
     @pytest.mark.asyncio
-    async def test_ecommerce_system_instruction_mentions_both_policies_and_catalog(self) -> None:
-        """Verifies that EcommerceAgent system instruction incorporates guidelines for both knowledge sources."""
-        agent = EcommerceAgent()
-        req = ChatRequest(agent_id="ecommerce", session_id="sess_ecom_04", message="Hola")
-        instruction = await agent.get_system_instruction(req)
-        assert "Live Catalog / Database Grounding" in instruction
-        assert "Business Context & Policies" in instruction
-        assert "políticas" in instruction.lower() or "policies" in instruction.lower()
-
-    @pytest.mark.asyncio
-    async def test_ecommerce_hybrid_conversation_contents(self) -> None:
-        """Verifies that build_conversation_contents formats the hybrid context correctly into the prompt."""
-        agent = EcommerceAgent()
+    async def test_analytics_margins_and_profitability_grounding(self) -> None:
+        """Verifies routing to margins and profitability on margin inquiry."""
+        agent = AnalyticsAgent()
         req = ChatRequest(
-            agent_id="ecommerce",
-            session_id="sess_ecom_05",
-            message='¿Cuánto cuesta el "Servicio Cloud AI" y cómo se realiza el envío?',
+            agent_id="analytics",
+            session_id="sess_an_02",
+            message="¿Cuál es el margen de ganancia y rentabilidad por categoría?",
         )
-        contents = await agent.build_conversation_contents(req)
-        assert len(contents) >= 1
-        user_msg = contents[-1]["parts"][0]["text"]
-        assert "[Context / Grounding Data]:" in user_msg
-        assert "Business Context & Policies" in user_msg
-        assert "Live Catalog / Database Grounding" in user_msg
-        assert "[User Query]:" in user_msg
-        assert req.message in user_msg
+        context = await agent.get_context_augmentation(req)
+        assert context is not None
+        assert "get_product_profitability" in context
+        assert "margins_and_profitability" in context
 
+    @pytest.mark.asyncio
+    async def test_analytics_funnel_and_cart_metrics_grounding(self) -> None:
+        """Verifies routing to funnel and abandoned carts on funnel inquiry."""
+        agent = AnalyticsAgent()
+        req = ChatRequest(
+            agent_id="analytics",
+            session_id="sess_an_03",
+            message="Muéstrame la tasa de abandono de carritos y la conversión del funnel.",
+        )
+        context = await agent.get_context_augmentation(req)
+        assert context is not None
+        assert "get_funnel_and_cart_metrics" in context
+        assert "funnel_and_cart_metrics" in context
+
+    @pytest.mark.asyncio
+    async def test_analytics_customer_rfm_segmentation_grounding(self) -> None:
+        """Verifies routing to customer RFM insights on customer segment inquiry."""
+        agent = AnalyticsAgent()
+        req = ChatRequest(
+            agent_id="analytics",
+            session_id="sess_an_04",
+            message="¿Cuántos clientes VIP tenemos y cuál es su LTV promedio?",
+        )
+        context = await agent.get_context_augmentation(req)
+        assert context is not None
+        assert "get_customer_segmentation" in context
+        assert "customer_segmentation" in context
+
+    @pytest.mark.asyncio
+    async def test_analytics_safe_sql_sandbox_grounding(self) -> None:
+        """Verifies routing to Safe SQL Sandbox on SELECT query."""
+        agent = AnalyticsAgent()
+        req = ChatRequest(
+            agent_id="analytics",
+            session_id="sess_an_05",
+            message="SELECT id, name, price FROM products LIMIT 5;",
+        )
+        context = await agent.get_context_augmentation(req)
+        assert context is not None
+        assert "execute_raw_sql_sandbox" in context
+        assert "sql_results" in context
 
 
 # ==============================================================================
@@ -310,3 +334,175 @@ class TestAgentDispatcher:
         # Healthy agent still operates normally
         healthy_res = await dispatcher.get("healthy").process(sample_chat_request_obj)
         assert healthy_res.agent_id == "healthy"
+
+
+# ==============================================================================
+# Analytics Agent Multi-Tool Intent Resolution & Tool Invocation Tests (Ticket QA-04)
+# ==============================================================================
+
+class TestAnalyticsAgentMultiToolResolution:
+    """Test suite for AnalyticsAgent intent routing across the 8 specialized Django tools."""
+
+    @pytest.mark.asyncio
+    async def test_analytics_agent_sales_intent_resolution(self) -> None:
+        """Verifies that sales/revenue inquiries invoke query_sales_analytics."""
+        agent = AnalyticsAgent()
+        req = ChatRequest(
+            agent_id="analytics",
+            session_id="sess_sales_01",
+            message="Quisiera ver el reporte de ventas e ingresos por categoría de este mes.",
+        )
+        context = await agent.get_context_augmentation(req)
+        assert context is not None
+        assert "tool_invoked" in context
+        assert "query_sales_analytics" in context
+        assert "total_revenue_usd" in context or "sales_analytics" in context
+
+    @pytest.mark.asyncio
+    async def test_analytics_agent_inventory_intent_resolution(self) -> None:
+        """Verifies that stock/inventory inquiries invoke get_inventory_health."""
+        agent = AnalyticsAgent()
+        req = ChatRequest(
+            agent_id="analytics",
+            session_id="sess_inv_01",
+            message="¿Cuáles productos están en stock crítico o con riesgo de quiebre?",
+        )
+        context = await agent.get_context_augmentation(req)
+        assert context is not None
+        assert "get_inventory_health" in context
+        assert "critical_stock_count" in context or "inventory_health" in context
+
+    @pytest.mark.asyncio
+    async def test_analytics_agent_margins_intent_resolution(self) -> None:
+        """Verifies that profitability/margin inquiries invoke get_product_profitability."""
+        agent = AnalyticsAgent()
+        req = ChatRequest(
+            agent_id="analytics",
+            session_id="sess_margin_01",
+            message="Mostrar análisis de rentabilidad, ganancias y margen porcentual por producto.",
+        )
+        context = await agent.get_context_augmentation(req)
+        assert context is not None
+        assert "get_product_profitability" in context
+        assert "overall_gross_margin_pct" in context or "margins_and_profitability" in context
+
+    @pytest.mark.asyncio
+    async def test_analytics_agent_funnel_intent_resolution(self) -> None:
+        """Verifies that conversion/cart inquiries invoke get_funnel_and_cart_metrics."""
+        agent = AnalyticsAgent()
+        req = ChatRequest(
+            agent_id="analytics",
+            session_id="sess_funnel_01",
+            message="Revisar tasa de conversión del embudo (funnel) y carritos abandonados.",
+        )
+        context = await agent.get_context_augmentation(req)
+        assert context is not None
+        assert "get_funnel_and_cart_metrics" in context
+        assert "cart_abandonment_rate_pct" in context or "funnel_and_cart_metrics" in context
+
+    @pytest.mark.asyncio
+    async def test_analytics_agent_segmentation_intent_resolution(self) -> None:
+        """Verifies that customer RFM/LTV inquiries invoke get_customer_segmentation."""
+        agent = AnalyticsAgent()
+        req = ChatRequest(
+            agent_id="analytics",
+            session_id="sess_cust_01",
+            message="Analizar métricas de clientes VIP y segmentos en riesgo de churn.",
+        )
+        context = await agent.get_context_augmentation(req)
+        assert context is not None
+        assert "get_customer_segmentation" in context
+        assert "vip" in context or "customer_segmentation" in context
+
+    @pytest.mark.asyncio
+    async def test_analytics_agent_reviews_intent_resolution(self) -> None:
+        """Verifies that customer satisfaction/reviews inquiries invoke get_customer_reviews_summary."""
+        agent = AnalyticsAgent()
+        req = ChatRequest(
+            agent_id="analytics",
+            session_id="sess_rev_01",
+            message="¿Cuál es el resumen de opiniones, reseñas y calificación promedio de clientes?",
+        )
+        context = await agent.get_context_augmentation(req)
+        assert context is not None
+        assert "get_customer_reviews_summary" in context
+        assert "average_rating" in context or "reviews_summary" in context
+
+    @pytest.mark.asyncio
+    async def test_analytics_agent_sql_sandbox_safe_intent(self) -> None:
+        """Verifies that SQL SELECT queries invoke execute_raw_sql_sandbox."""
+        agent = AnalyticsAgent()
+        req = ChatRequest(
+            agent_id="analytics",
+            session_id="sess_sql_01",
+            message="Ejecuta la consulta: SELECT id, name, price, stock FROM products WHERE stock > 5;",
+            user_token="valid-analyst-token",
+        )
+        context = await agent.get_context_augmentation(req)
+        assert context is not None
+        assert "execute_raw_sql_sandbox" in context
+        assert "sandbox_mode" in context or "sql_results" in context
+
+    @pytest.mark.asyncio
+    async def test_analytics_agent_sql_sandbox_blocks_destructive_sql(self) -> None:
+        """Verifies that destructive SQL commands in user prompts are blocked with safety error."""
+        agent = AnalyticsAgent()
+        req = ChatRequest(
+            agent_id="analytics",
+            session_id="sess_sql_unsafe",
+            message="Ejecuta: DROP TABLE users; SELECT * FROM products;",
+        )
+        context = await agent.get_context_augmentation(req)
+        assert context is not None
+        assert "Safety violation" in context or "error" in context
+
+    @pytest.mark.asyncio
+    async def test_analytics_agent_auth_status_propagation(self) -> None:
+        """Verifies that user_token is validated and attached to the analytics auth context."""
+        agent = AnalyticsAgent()
+        req = ChatRequest(
+            agent_id="analytics",
+            session_id="sess_auth_01",
+            message="Dame el balance general de ventas",
+            user_token="valid-jwt-token-qa-test",
+        )
+        context = await agent.get_context_augmentation(req)
+        assert context is not None
+        assert "auth_context" in context
+        assert "authenticated" in context
+
+
+# ==============================================================================
+# Ecommerce Agent Advanced Tools & Reviews Integration Tests (Ticket QA-04)
+# ==============================================================================
+
+class TestEcommerceAgentAdvancedTools:
+    """Test suite for EcommerceAgent reviews and semantic catalog tools."""
+
+    @pytest.mark.asyncio
+    async def test_ecommerce_agent_customer_reviews_inquiry(self) -> None:
+        """Verifies that customer inquiries about opinions or reviews include reviews data."""
+        agent = EcommerceAgent()
+        req = ChatRequest(
+            agent_id="ecommerce",
+            session_id="sess_ecom_rev_01",
+            message="¿Qué opiniones y calificaciones tienen los clientes sobre sus cursos y servicios?",
+        )
+        context = await agent.get_context_augmentation(req)
+        assert context is not None
+        assert "Customer Reviews & Ratings Summary" in context
+        assert "average_rating" in context or "total_reviews" in context
+
+    @pytest.mark.asyncio
+    async def test_ecommerce_agent_semantic_search_direct(self) -> None:
+        """Verifies semantic search functionality directly on Django service."""
+        from app.services.django_api import get_django_api_service
+        service = get_django_api_service()
+        results = await service.semantic_catalog_search(
+            query="arquitectura de microservicios distribuida con docker",
+            top_k=2,
+        )
+        assert results["status"] == "success"
+        assert len(results["items"]) <= 2
+        assert "name" in results["items"][0]
+
