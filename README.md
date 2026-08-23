@@ -12,63 +12,63 @@
 [![Tests](https://img.shields.io/badge/Tests-90%2F90%20Passed-brightgreen?style=for-the-badge&logo=pytest&logoColor=white)](https://pytest.org)
 
 <p align="center">
-  <b>Un microservicio de inteligencia artificial listo para producción, diseñado para la orquestación multi-agente, consultas analíticas en lenguaje natural (Data Analytics), streaming Server-Sent Events (SSE) de ultrabaja latencia y automatización de infraestructura resiliente.</b>
+  <b>A production-grade AI microservice engineered for autonomous multi-agent orchestration, natural language Data Analytics & BI querying, ultra-low latency Server-Sent Events (SSE) streaming, and resilient cloud automation.</b>
 </p>
 
 ---
 
-[🚀 Quickstart](#-guía-de-inicio-rápido) • [🏛️ Arquitectura](#-arquitectura-del-sistema) • [📊 Data Analytics & KPIs](#-módulo-de-data-analytics--business-intelligence) • [🤖 Sistema Multi-Agente](#-sistema-multi-agente--orquestación) • [⚙️ Automatización & DevOps](#-automatizaciones--resiliencia-en-producción) • [🎨 Drop-in Chat Widget](#-frontend--shadow-dom-drop-in-widget) • [📡 API Reference](#-especificación-de-la-api)
+[🚀 Quickstart](#-quickstart-guide) • [🏛️ Architecture](#-system-architecture) • [📊 Data Analytics & BI](#-data-analytics--business-intelligence-engine) • [🤖 Multi-Agent System](#-multi-agent-system--routing) • [⚙️ Automation & Resilience](#-automation--production-resilience) • [🎨 Drop-in Chat Widget](#-frontend--shadow-dom-drop-in-widget) • [📡 API Reference](#-api-specification)
 
 ---
 
 </div>
 
-## 🌟 Resumen Ejecutivo
+## 🌟 Executive Summary
 
-**Chatbot Engine Gateway** es una solución integral orientada a desacoplar la carga de inferencia de IA y procesamiento de datos en tiempo real de arquitecturas transaccionales tradicionales (monolitos Django, microservicios Core). 
+**Chatbot Engine Gateway** is an enterprise-ready asynchronous AI gateway designed to offload heavy LLM inference, real-time context grounding, and telemetry processing from core transactional backends (such as Django monoliths and microservice clusters).
 
-Este proyecto demuestra competencias avanzadas en **Ingeniería de Software**, **Data Analytics automatizado**, **Orquestación de LLMs** y **DevOps Moderno**:
+This project demonstrates core competencies in **Modern Software Engineering**, **Automated Data Analytics & Business Intelligence**, **LLM Multi-Agent Orchestration**, and **Cloud Infrastructure Automation**:
 
-- 📈 **Data Analytics & BI en Lenguaje Natural**: Consulta de KPIs, análisis de embudos de conversión, distribución de ventas, pronósticos y resúmenes ejecutivos con validación de accesos vía JWT.
-- 🤖 **Arquitectura Multi-Agente Autónoma**: Clasificador de intenciones heurístico/semántico que despacha peticiones dinámicamente entre agentes especializados (`analytics`, `ecommerce`, `portfolio`).
-- ⚡ **Streaming SSE de Alta Concurrencia**: Transmisión de tokens en tiempo real vía Server-Sent Events (`text/event-stream`) con *Exponential Backoff + Jitter* ante cuellos de botella de red o límites de cuota (429/503).
-- 🧠 **Memoria Conversacional Distribuida**: Persistencia de sesiones multi-turno en Redis con auto-expiración (TTL) y fallback resiliente en memoria (*Zero-Downtime Guarantee*).
-- 🔄 **Automatización Keep-Alive y CI/CD**: Workflow de GitHub Actions + script de telemetría sin dependencias que mide latencias (RTT) y previene la hibernación de servidores.
-- 🎨 **Widget Web "Drop-in" Zero-Dependencies**: Componente web encapsulado en **Shadow DOM** listo para incrustar en cualquier frontend sin colisión de estilos CSS.
+- 📈 **Natural Language Data Analytics & BI**: Instant querying of business KPIs, conversion funnels, sales trends, demand forecasting, and executive reporting with JWT-based Role-Based Access Control (RBAC).
+- 🤖 **Autonomous Multi-Agent Architecture**: Intelligent intent classification engine routing queries dynamically across specialized domain agents (`analytics`, `ecommerce`, `portfolio`).
+- ⚡ **High-Concurrency SSE Streaming**: Real-time token streaming via Server-Sent Events (`text/event-stream`) backed by automatic *Exponential Backoff + Jitter* resilience against upstream API rate limits (429/503).
+- 🧠 **Distributed Session Memory**: Multi-turn conversation state persistence via Redis with auto-expiring TTL and an automated in-memory fallback store (*Zero-Downtime Resilience*).
+- 🔄 **Automated Telemetry & Anti-Cold-Start**: Zero-dependency Python health script and GitHub Actions cron workflow measuring latency (RTT) and preventing cloud server spin-downs.
+- 🎨 **Zero-Dependency Shadow DOM Widget**: Embeddable drop-in web component offering 100% CSS/JS style isolation, active markdown parsing, code copying, and streaming controls.
 
 ---
 
-## 🏛️ Arquitectura del Sistema
+## 🏛️ System Architecture
 
-El siguiente diagrama ilustra el flujo de datos desde el cliente hasta la resolución analítica y generación de respuestas en streaming:
+The following diagram illustrates the complete data flow from end-user client interfaces to analytics resolution, context grounding, and real-time streaming:
 
 ```mermaid
 flowchart TD
-    subgraph Clients["🌐 Clientes & Integraciones"]
+    subgraph Clients["🌐 Clients & Integrations"]
         direction TB
         WebApp["🖥️ Full-Screen Web App (frontend/index.html)"]
         Widget["🧩 Drop-in Widget / Shadow DOM (chat-widget.js)"]
-        ExternalApps["📱 API Clients / Third-Party Apps"]
+        ExternalApps["📱 External REST Clients / Third-Party Services"]
     end
 
-    subgraph Gateway["⚡ FastAPI AI Agent Gateway (Microservicio)"]
+    subgraph Gateway["⚡ FastAPI AI Agent Gateway (Microservice)"]
         direction TB
-        Security["🔐 Security Layer (CORS + X-Internal-Secret)"]
+        Security["🔐 Security Layer (CORS + X-Internal-Secret Header)"]
         Router["🔀 Intent Classifier & Dispatcher"]
         
-        subgraph Agents["🤖 Agentes Especializados"]
-            AgPortfolio["💼 Portfolio Agent<br/>(CV, Skills & Proyectos)"]
-            AgEcom["🛍️ E-Commerce Agent<br/>(Catálogo & Cotizaciones)"]
-            AgAnalytics["📊 Analytics Agent<br/>(KPIs, Ventas, Forecast)"]
+        subgraph Agents["🤖 Specialized AI Agents"]
+            AgPortfolio["💼 Portfolio Agent<br/>(CV, Tech Stack & Projects)"]
+            AgEcom["🛍️ E-Commerce Agent<br/>(Catalog Search & Quotes)"]
+            AgAnalytics["📊 Analytics Agent<br/>(KPIs, Revenue & Forecasting)"]
         end
 
-        LLMService["🧠 LLM Engine (Google GenAI / Gemini 3.7 Flash)<br/>• Exponential Backoff & Jitter<br/>• SSE Token Streaming Generator"]
+        LLMService["🧠 LLM Engine (Google GenAI / Gemini 3.7 Flash)<br/>• Exponential Backoff & Jitter Interceptor<br/>• Asynchronous SSE Token Streamer"]
     end
 
-    subgraph StateAndBackend["💾 Capa de Datos & Servicios Externos"]
+    subgraph StateAndBackend["💾 Data Layer & External Backends"]
         direction TB
-        Redis["🔴 Redis Session Store (TTL Cache)<br/>+ In-Memory Resilience Fallback"]
-        DjangoMonolith["🐍 Django Backend Core (Auth JWT & Business DB)"]
+        Redis["🔴 Redis Session Store (TTL Expiration)<br/>+ In-Memory Resilience Fallback"]
+        DjangoMonolith["🐍 Django Core Backend (Auth JWT & Business DB)"]
         GeminiAPI["☁️ Google AI Studio API (Gemini Cloud)"]
     end
 
@@ -81,26 +81,26 @@ flowchart TD
     Router -->|Intent: ecommerce| AgEcom
     Router -->|Intent: analytics| AgAnalytics
 
-    AgPortfolio -->|RAG Context| DjangoMonolith
-    AgEcom -->|Catalog Search| DjangoMonolith
-    AgAnalytics -->|Query Metrics & JWT Validation| DjangoMonolith
+    AgPortfolio -->|RAG Grounding| DjangoMonolith
+    AgEcom -->|Catalog Search Query| DjangoMonolith
+    AgAnalytics -->|Metric Query & JWT Validation| DjangoMonolith
 
-    AgPortfolio & AgEcom & AgAnalytics -->|Fetch History & Save Turn| Redis
+    AgPortfolio & AgEcom & AgAnalytics -->|Retrieve History & Save Turn| Redis
     AgPortfolio & AgEcom & AgAnalytics -->|Inference Request| LLMService
 
-    LLMService <-->|Async API / Token Stream| GeminiAPI
-    LLMService -->|SSE Token Chunks| Clients
+    LLMService <-->|Async Streaming Request| GeminiAPI
+    LLMService -->|SSE Event Chunks| Clients
 ```
 
 ---
 
-## 📊 Módulo de Data Analytics & Business Intelligence
+## 📊 Data Analytics & Business Intelligence Engine
 
-El agente `AnalyticsAgent` (`app/agents/analytics.py`) actúa como un **Asistente de Business Intelligence** capaz de transformar preguntas en lenguaje natural en consultas estructuradas de métricas, interpretando datos del backend y presentando informes ejecutivos listos para la toma de decisiones.
+The `AnalyticsAgent` (`app/agents/analytics.py`) serves as an automated **Business Intelligence & Data Analyst Copilot**. It interprets user prompts in natural language, resolves analytical metrics from backend data sources, and generates structured executive reports.
 
 ```
                   ┌────────────────────────────────────────────────────────┐
-                  │ 💬 Usuario: "¿Cuáles son los KPIs de ventas del mes?"   │
+                  │ 💬 User: "Show me monthly sales KPIs and conversion"   │
                   └───────────────────────────┬────────────────────────────┘
                                               ▼
                   ┌────────────────────────────────────────────────────────┐
@@ -108,221 +108,221 @@ El agente `AnalyticsAgent` (`app/agents/analytics.py`) actúa como un **Asistent
                   └───────────────────────────┬────────────────────────────┘
                                               ▼
                   ┌────────────────────────────────────────────────────────┐
-                  │ 🔐 Validación de Token JWT (Roles: analyst / admin)    │
+                  │ 🔐 JWT Token RBAC Validation (Roles: analyst / admin)  │
                   └───────────────────────────┬────────────────────────────┘
                                               ▼
                   ┌────────────────────────────────────────────────────────┐
-                  │ 📈 Query al Backend: /api/v1/internal/analytics/metrics│
+                  │ 📈 Query Backend: /api/v1/internal/analytics/metrics   │
                   └───────────────────────────┬────────────────────────────┘
                                               ▼
 ┌───────────────────────────────────────────────────────────────────────────────────────────┐
-│ 📊 Respuesta Estructurada Generada (Markdown Tables + Insights):                           │
+│ 📊 Generated Executive Report (Markdown Tables + Decision Insights):                       │
 │                                                                                           │
-│ | Métrica                   | Valor Actual   | Variación (MoM) | Estado                   │
+│ | Core Metric               | Current Value  | MoM Variation   | Status                   │
 │ | :------------------------ | :------------- | :-------------- | :----------------------- │
-│ | **Ingresos Totales (GMV)**| $54,200.00 USD | +14.2% 🟢       | Supera objetivo          │
-│ | **Usuarios Activos (DAU)**| 1,520          | +8.5% 🟢        | Crecimiento sostenido    │
-│ | **Tasa de Conversión**    | 3.8%           | +0.4pp 🟢       | En rango óptimo          │
+│ | **Gross Revenue (GMV)**   | $54,200.00 USD | +14.2% 🟢       | Exceeding Monthly Target │
+│ | **Daily Active Users**    | 1,520 DAU      | +8.5% 🟢        | Sustained Growth         │
+│ | **Conversion Rate**       | 3.8%           | +0.4pp 🟢       | Optimal Range            │
 │                                                                                           │
-│ 💡 **Observación Clave**: El 62% del volumen de ventas proviene de la categoría Cursos...   │
+│ 💡 **Executive Takeaway**: 62% of transaction volume originates from Cloud AI Training...  │
 └───────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 🔍 Capacidades Analíticas Soportadas
-- **Resúmenes Ejecutivos de Negocio (`overview`)**: Indicadores clave de rendimiento (DAU, ingresos acumulados, tasas de rebote y conversión).
-- **Análisis de Catálogo y Productos Estrella (`top_products`)**: Identificación de productos con mayor rotación, márgenes y demanda insatisfecha.
-- **Distribución por Categorías (`category_distribution`)**: Participación porcentual de ventas por vertical de negocio.
-- **Detección de Tendencias & Pronósticos (`forecast`)**: Modelado cualitativo y cuantitativo basado en series temporales del último periodo (7d, 30d, 90d, 1y).
-- **Seguridad en Datos Restringidos**: Control de acceso basado en roles (RBAC) mediante tokens JWT para proteger métricas confidenciales de usuarios no autorizados.
+### 🔍 Supported Analytical Dimensions
+- **Executive Summaries (`overview`)**: Core business KPIs (Daily Active Users, Gross Merchandise Value, bounce and conversion rates).
+- **Top Performing Products (`top_products`)**: High-margin product identification, sales velocity, and inventory turnover.
+- **Category Revenue Distribution (`category_distribution`)**: Share of wallet and revenue breakdown across service lines.
+- **Predictive Forecasting & Trends (`forecast`)**: Qualitative and quantitative trend analysis across configurable horizons (`7d`, `30d`, `90d`, `1y`).
+- **Granular RBAC Security**: JWT authorization verification preventing unauthenticated access to confidential company metrics.
 
 ---
 
-## 🤖 Sistema Multi-Agente & Orquestación
+## 🤖 Multi-Agent System & Routing
 
-El Gateway implementa un orquestador extensible (`AgentDispatcher`) que desacopla la lógica de negocio en agentes modulares:
+The gateway provides a modular and extensible orchestration system (`AgentDispatcher`) designed for clear separation of concerns:
 
-| Agente | Identificador | Especialización & Casos de Uso | Capacidades |
+| Agent | Identifier | Domain & Specialization | Key Capabilities |
 | :--- | :---: | :--- | :--- |
-| **Analytics & BI** | `analytics` | Consultas analíticas, métricas financieras, tráfico de usuarios y resúmenes ejecutivos. | `kpi_metrics`, `sales_reporting`, `conversion_funnel`, `forecast` |
-| **E-Commerce & Catálogo** | `ecommerce` | Búsqueda contextual de productos (RAG), consulta de inventario en tiempo real, precios y asesoramiento de compra. | `product_search`, `price_inquiry`, `stock_check`, `purchase_guidance` |
-| **Portfolio & Tech CV** | `portfolio` | Trayectoria profesional, demostración interactiva del stack tecnológico, detalle de arquitecturas y contacto. | `cv_inquiry`, `skills_overview`, `projects_showcase`, `architecture_consulting` |
-| **Auto-Router** | `auto` | Clasificación automática de la intención del mensaje del usuario y enrutamiento transparente al agente ideal. | `intent_classification`, `fallback_routing` |
+| **Analytics & BI** | `analytics` | Business intelligence, sales performance, traffic metrics, and executive summaries. | `kpi_metrics`, `sales_reporting`, `conversion_funnel`, `forecast` |
+| **E-Commerce & Catalog** | `ecommerce` | Contextual catalog search (RAG), real-time stock verification, pricing, and purchase guidance. | `product_search`, `price_inquiry`, `stock_check`, `purchase_guidance` |
+| **Portfolio & Tech CV** | `portfolio` | Professional background, live tech stack showcase, architectural design review, and contact info. | `cv_inquiry`, `skills_overview`, `projects_showcase`, `architecture_consulting` |
+| **Auto-Router** | `auto` | Heuristic & semantic classifier that automatically resolves and delegates messages to the optimal agent. | `intent_classification`, `fallback_routing` |
 
-### 🛠️ Flujo de Grounding Contextual (RAG)
-Cada agente implementa el patrón `get_context_augmentation()`. Antes de invocar al modelo generativo:
-1. Se recupera el historial reciente de la sesión (`RedisMemoryService`).
-2. Se inyecta información contextual actualizada (catálogo, métricas o perfil profesional) desde el backend transaccional.
-3. Se ensambla el *system prompt* especializado garantizando respuestas objetivas y minimizando alucinaciones.
+### 🛠️ Context Augmentation Pipeline (RAG)
+Every agent implements the `get_context_augmentation()` hook:
+1. Multi-turn session context is pulled from `RedisMemoryService`.
+2. Dynamic external domain data (e.g., product catalog, analytics KPIs, CV records) is injected into the payload.
+3. A structured, domain-constrained system prompt ensures fact-grounded responses and mitigates LLM hallucinations.
 
 ---
 
-## ⚙️ Automatizaciones & Resiliencia en Producción
+## ⚙️ Automation & Production Resilience
 
-### 1. ⏱️ Mecanismo Anti-Hibernación & Telemetría (Keep-Alive)
-Para optimizar costos en infraestructura cloud Serverless o planes PaaS (como Render Free/Eco Tier, donde las instancias hibernan tras 15 minutos):
-- **Automatización CI/CD con GitHub Actions**: El workflow [`.github/workflows/keep_alive.yml`](file:///.github/workflows/keep_alive.yml) ejecuta periódicamente un pulso de salud cada 10 minutos.
-- **Script Standalone con Cero Dependencias**: [`scripts/keep_alive.py`](file:///scripts/keep_alive.py) utiliza exclusivamente la biblioteca estándar de Python (`urllib.request`), mide el *Round-Trip Time* (RTT) en milisegundos y aplica reintentos con *Exponential Backoff*.
-- **Reporte en GitHub Step Summary**: Registro automático del estado del servicio y latencias para auditoría visual directa en GitHub.
+### 1. ⏱️ Anti-Hibernación Keep-Alive Engine
+To optimize cloud infrastructure costs on serverless or eco-tier hosting (e.g., Render Free/Eco tier with 15-minute idle spin-down):
+- **Automated CI/CD Workflow**: [`.github/workflows/keep_alive.yml`](file:///.github/workflows/keep_alive.yml) triggers health probes every 10 minutes.
+- **Zero-Dependency Python Utility**: [`scripts/keep_alive.py`](file:///scripts/keep_alive.py) runs on pure standard library (`urllib.request`), measuring exact Round-Trip Time (RTT) in milliseconds with configurable exponential retries.
+- **GitHub Step Summary Reports**: Real-time health statuses and response latencies are automatically published to the GitHub Actions dashboard.
 
-### 2. 🛡️ Tolerancia a Fallos en Inferencia LLM (Backoff Exponencial con Jitter)
-El cliente [`LLMClientService`](file:///app/services/llm_client.py) cuenta con un interceptor inteligente de errores transitorios:
-- Detecta automáticamente picos de tráfico y límites de cuota (`429 Too Many Requests`, `503 Service Unavailable`, `504 Gateway Timeout`, `Resource Exhausted`).
-- Aplica reintentos automáticos configurables con retardo exponencial y variación aleatoria (*Jitter*) para evitar el efecto *Thundering Herd*.
+### 2. 🛡️ LLM Fault Tolerance (Exponential Backoff with Jitter)
+The [`LLMClientService`](file:///app/services/llm_client.py) includes an automated retry interceptor:
+- Catches transient API hiccups (`429 Rate Limit Exceeded`, `503 Service Unavailable`, `504 Gateway Timeout`, `Resource Exhausted`).
+- Employs an exponential delay multiplier with randomized jitter, preventing synchronization spikes and cascading failures (*Thundering Herd* effect).
 
-### 3. 💾 Resiliencia en Memoria de Sesión (Dual-Tier Memory)
-Si la conexión con Redis se interrumpe, el servicio conmuta automáticamente a un almacén en memoria volátil (`InMemoryFallbackStore`), garantizando que la API continúe respondiendo sin arrojar errores `500` a los usuarios.
+### 3. 💾 Dual-Tier Session Memory
+If Redis encounters network partitions or downtime, the gateway seamlessly falls back to an in-memory session store (`InMemoryFallbackStore`), maintaining zero downtime for ongoing conversations.
 
 ---
 
 ## 🎨 Frontend & Shadow DOM Drop-in Widget
 
-El proyecto incluye dos interfaces de usuario listas para usar, construidas bajo la filosofía **Zero-Dependencies** (HTML5 semántico, CSS moderno y JavaScript ES6+ asíncrono):
+The repository includes a modern, zero-dependency UI suite built with semantic HTML5, modern tokenized CSS, and asynchronous ES6+ JavaScript:
 
 ```
 frontend/
-├── index.html         # Aplicación web completa Full-Screen con selector de agentes y estado de salud
-├── chat-widget.js     # Widget universal flotante Drop-in encapsulado en Shadow DOM (Zero CSS conflict)
-├── styles.css         # Design system con tokens CSS, modo oscuro y tipografía moderna
-├── app.js             # Lógica asíncrona de consumo de SSE streams, renderizado Markdown y gestión de sesión
-└── demo.html          # Portal web simulado para pruebas de integración del widget embebible
+├── index.html         # Full-Screen standalone chat interface with agent picker and health badges
+├── chat-widget.js     # Universal Drop-in chat widget isolated via Shadow DOM (zero CSS collisions)
+├── styles.css         # Modern design tokens, slate/zinc dark theme, and fluid responsive layouts
+├── app.js             # Async SSE stream handler, native Markdown parser, and session manager
+└── demo.html          # Simulated host portal demonstrating one-line drop-in widget integration
 ```
 
-### 🔌 Cómo embeber el Chat Widget en 1 línea:
-Simplemente añade la siguiente etiqueta antes del cierre de `</body>` en cualquier aplicación web (Django, React, WordPress o HTML plano):
+### 🔌 Single-Line Widget Integration
+Drop the widget into any existing template (Django, React, Next.js, WordPress, or static HTML):
 
 ```html
 <script 
-  src="https://tu-dominio.com/chat-widget.js" 
-  data-api-url="https://tu-gateway.onrender.com"
+  src="https://your-domain.com/chat-widget.js" 
+  data-api-url="https://your-gateway.onrender.com"
   data-agent="portfolio"
 ></script>
 ```
 
-#### Características del Widget:
-- 🛡️ **Shadow DOM Encapsulation**: Aislamiento total. Los estilos de la página anfitriona jamás romperán el widget y viceversa.
-- 🌊 **Lector de ReadableStream**: Renderizado token a token en tiempo real con animación de cursor y soporte de cancelación mediante `AbortController`.
-- 📝 **Motor Markdown Nativo**: Renderiza títulos, tablas, listas y bloques de código con botón interactivo de **"Copiar Código"**.
-- 🟢 **Live Health Indicator**: Monitoreo dinámico del microservicio FastAPI (estados: Online / Verificando / Offline).
+#### Widget Highlights:
+- 🛡️ **Shadow DOM Encapsulation**: Host application CSS styles will never bleed into or break the chat widget.
+- 🌊 **Real-Time Token Rendering**: Consumes `ReadableStream` chunks with typing cursor animations and clean `AbortController` cancellation.
+- 📝 **Built-in Markdown & Code Engine**: Renders tables, lists, and code blocks with an interactive **"Copy Code"** button.
+- 🟢 **Live Health Beacon**: Continuous monitoring against `/health` (states: Online / Verifying / Offline).
 
 ---
 
-## 📡 Especificación de la API
+## 📡 API Specification
 
-### Endpoints Principales
+### Primary Endpoints
 
-| Método | Endpoint | Descripción | Autenticación |
+| Method | Endpoint | Description | Auth |
 | :--- | :--- | :--- | :---: |
-| `POST` | `/api/v1/chat/stream` | Generación conversacional en streaming en tiempo real (**SSE**). | `X-Internal-Secret` (opcional en dev) |
-| `POST` | `/api/v1/chat` | Generación estándar síncrona (Respuesta JSON completa). | `X-Internal-Secret` (opcional en dev) |
-| `GET` | `/api/v1/chat/agents` | Lista metadatos y capacidades de los agentes registrados. | Pública |
-| `GET` | `/api/v1/chat/history/{session_id}` | Obtiene el historial conversacional almacenado en memoria. | Pública |
-| `DELETE`| `/api/v1/chat/history/{session_id}` | Borra el historial de una sesión de la memoria Redis. | Pública |
-| `GET` | `/health` | Healthcheck ultraligero (ideal para Keep-Alive y Render). | Pública |
-| `GET` | `/health/details` | Diagnóstico profundo de dependencias (Redis y Django Backend). | Pública |
-| `GET` | `/ping` | Endpoint minimalista de validación de latencia. | Pública |
+| `POST` | `/api/v1/chat/stream` | Real-time conversational streaming (**Server-Sent Events**). | `X-Internal-Secret` (optional in dev) |
+| `POST` | `/api/v1/chat` | Standard synchronous chat completion (Full JSON response). | `X-Internal-Secret` (optional in dev) |
+| `GET` | `/api/v1/chat/agents` | Metadata and capability descriptors for all registered agents. | Public |
+| `GET` | `/api/v1/chat/history/{session_id}` | Retrieves conversational message history for a session. | Public |
+| `DELETE`| `/api/v1/chat/history/{session_id}` | Clears conversation memory for a specific session ID. | Public |
+| `GET` | `/health` | Ultralight healthcheck (zero external dependency calls). | Public |
+| `GET` | `/health/details` | Deep dependency check (verifies Redis and Django connectivity). | Public |
+| `GET` | `/ping` | Minimal latency validation endpoint returning `{"ping": "pong"}`. | Public |
 
 ---
 
-### Ejemplos de Petición
+### Request & Response Examples
 
-#### 1. Streaming SSE en Tiempo Real (`curl`)
+#### 1. Real-Time SSE Streaming (`curl`)
 ```bash
 curl -N -X POST "http://localhost:8000/api/v1/chat/stream" \
   -H "Content-Type: application/json" \
   -d '{
     "agent_id": "analytics",
-    "session_id": "session_user_01",
-    "message": "¿Podrías darme un resumen de las ventas y el KPI de conversión de este mes?",
+    "session_id": "sess_analytics_01",
+    "message": "What were our top-performing products and revenue trends this month?",
     "stream": true
   }'
 ```
 
-**Respuesta Event-Stream:**
+**SSE Event-Stream Output:**
 ```text
-data: {"token":"📊 ","agent_id":"analytics","session_id":"session_user_01","done":false}
+data: {"token":"📊 ","agent_id":"analytics","session_id":"sess_analytics_01","done":false}
 
-data: {"token":"Resumen ","agent_id":"analytics","session_id":"session_user_01","done":false}
+data: {"token":"Executive ","agent_id":"analytics","session_id":"sess_analytics_01","done":false}
 
-data: {"token":"Ejecutivo:","agent_id":"analytics","session_id":"session_user_01","done":false}
+data: {"token":"Summary:","agent_id":"analytics","session_id":"sess_analytics_01","done":false}
 
 ...
 
-data: {"token":"","agent_id":"analytics","session_id":"session_user_01","done":true,"metadata":{"total_tokens_yielded":145,"latency_ms":310.5,"agent_name":"Analytics & Business Metrics Agent"}}
+data: {"token":"","agent_id":"analytics","session_id":"sess_analytics_01","done":true,"metadata":{"total_tokens_yielded":145,"latency_ms":310.5,"agent_name":"Analytics & Business Metrics Agent"}}
 
 data: [DONE]
 ```
 
-#### 2. Consulta Síncrona JSON
+#### 2. Synchronous JSON Completion
 ```bash
 curl -X POST "http://localhost:8000/api/v1/chat" \
   -H "Content-Type: application/json" \
   -d '{
     "agent_id": "ecommerce",
-    "session_id": "session_user_02",
-    "message": "¿Tienen cursos o consultorías sobre arquitectura de microservicios?",
+    "session_id": "sess_ecom_01",
+    "message": "Do you offer microservices architecture consulting sessions?",
     "stream": false
   }'
 ```
 
 ---
 
-## 🚀 Guía de Inicio Rápido
+## 🚀 Quickstart Guide
 
-### Requisitos Previos
+### Prerequisites
 - **Python 3.11+**
-- **Docker & Docker Compose** (opcional, para ejecución contenerizada)
-- **API Key de Google AI Studio** ([Obtener aquí](https://aistudio.google.com/))
-- **Instancia de Redis** (Local o Cloud como Upstash)
+- **Docker & Docker Compose** (optional, for containerized runtimes)
+- **Google AI Studio API Key** ([Get one here](https://aistudio.google.com/))
+- **Redis Instance** (Local or Managed Serverless, e.g., Upstash)
 
-### 1. Clonar el Repositorio
+### 1. Clone the Repository
 ```bash
 git clone https://github.com/waycold/Chatbot-Engine-Gateway.git
 cd Chatbot-Engine-Gateway
 ```
 
-### 2. Configurar Variables de Entorno
-Copia el archivo de ejemplo y edita las claves necesarias:
+### 2. Environment Configuration
+Copy the sample environment file and configure credentials:
 ```bash
 cp .env.example .env
 ```
 
-| Variable | Descripción | Valor Ejemplo |
+| Variable | Description | Example Value |
 | :--- | :--- | :--- |
-| `GEMINI_API_KEY` | Clave de API de Google Gemini | `AIzaSyD...` |
-| `DEFAULT_MODEL` | Modelo LLM base | `gemini-3.7-flash` |
-| `REDIS_URL` | URI de conexión a Redis | `redis://localhost:6379/0` o `rediss://...` |
-| `INTERNAL_API_SECRET` | Token compartido para requests seguros | `tu_clave_secreta_super_segura` |
-| `DJANGO_BACKEND_URL` | URL del monolito de negocio | `http://localhost:8000` |
-| `BACKEND_CORS_ORIGINS`| Orígenes permitidos para peticiones Web | `http://localhost:3000,http://127.0.0.1:3000` |
+| `GEMINI_API_KEY` | Google AI Studio / Gemini API Key | `AIzaSyD...` |
+| `DEFAULT_MODEL` | Default LLM model identifier | `gemini-3.7-flash` |
+| `REDIS_URL` | Redis connection URI | `redis://localhost:6379/0` or `rediss://...` |
+| `INTERNAL_API_SECRET` | Shared secret for inter-service authentication | `your_secure_internal_token` |
+| `DJANGO_BACKEND_URL` | Base URL of transactional Django backend | `http://localhost:8000` |
+| `BACKEND_CORS_ORIGINS`| Allowed CORS origins for web clients | `http://localhost:3000,http://127.0.0.1:3000` |
 
-### 3. Ejecución Local con Virtualenv
+### 3. Local Execution with Virtual Environment
 
 ```bash
-# Crear y activar entorno virtual
+# Initialize and activate virtual environment
 python -m venv venv
-# En Windows:
+# On Windows:
 .\venv\Scripts\activate
-# En Linux/macOS:
+# On Linux/macOS:
 source venv/bin/activate
 
-# Instalar dependencias
+# Install dependencies
 pip install -r requirements.txt
 
-# Iniciar el servidor de desarrollo
+# Start the development server
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
-- 📖 **Documentación Swagger Interactiva**: [http://localhost:8000/docs](http://localhost:8000/docs)
-- 🔍 **OpenAPI JSON Schema**: [http://localhost:8000/openapi.json](http://localhost:8000/openapi.json)
-- 🖥️ **Frontend Demo**: Abre [`frontend/index.html`](file:///frontend/index.html) en tu navegador o sírvelo con `python -m http.server 3000 --directory frontend`.
+- 📖 **Interactive Swagger UI**: [http://localhost:8000/docs](http://localhost:8000/docs)
+- 🔍 **OpenAPI Specification**: [http://localhost:8000/openapi.json](http://localhost:8000/openapi.json)
+- 🖥️ **Frontend Demo**: Open [`frontend/index.html`](file:///frontend/index.html) in your browser or run `python -m http.server 3000 --directory frontend`.
 
-### 4. Ejecución con Docker
+### 4. Running with Docker
 
-Construcción y ejecución con el contenedor seguro multi-stage:
+Build and run using the optimized multi-stage container:
 ```bash
-# Construir imagen Docker
+# Build Docker image
 docker build -t ai-agent-gateway:latest .
 
-# Ejecutar contenedor
+# Run containerized service
 docker run -d --name ai-gateway \
   -p 8000:8000 \
   --env-file .env \
@@ -331,54 +331,54 @@ docker run -d --name ai-gateway \
 
 ---
 
-## 🧪 Suite de Pruebas & Calidad de Código
+## 🧪 Test Suite & Code Quality
 
-El repositorio cuenta con una cobertura de pruebas exhaustiva que valida la integridad de esquemas, agentes, integración con Redis/Django, streaming SSE y configuración de infraestructura Docker/IaC.
+The codebase enforces strict code quality and high reliability across schema validations, agent dispatchers, mock network handlers, and infrastructure configurations.
 
 ```bash
-# Ejecutar suite completa con pytest
+# Execute comprehensive pytest suite
 pytest
 ```
 
-**Resultado de Pruebas:**
+**Test Execution Results:**
 ```text
 ============================= 90 passed in 16.68s =============================
 ```
 
-### Distribución de Tests:
-- 🧪 `tests/test_api_chat.py`: Pruebas de endpoints REST, SSE streaming, validación de payloads erróneos (422) y control de errores.
-- 🧪 `tests/test_agents.py`: Lógica del `AgentDispatcher`, clasificación de intenciones y generación contextual de cada agente.
-- 🧪 `tests/test_services.py`: Clientes HTTP de Django, tolerancia a fallos en Redis Memory y reintentos en `LLMClientService`.
-- 🧪 `tests/test_schemas.py`: Validación estricta de tipos de datos con Pydantic v2.
-- 🧪 `tests/test_docker_and_infra.py`: Verificación estática del `Dockerfile` (seguridad no-root), blueprint `render.yaml` y script `keep_alive.py`.
-- 🧪 `tests/test_health.py`: Endpoints de monitoreo, telemetría y encabezados CORS.
+### Test Coverage Breakdown:
+- 🧪 `tests/test_api_chat.py`: REST and SSE endpoints, payload validation errors (422), rate limiting, and exception boundaries.
+- 🧪 `tests/test_agents.py`: `AgentDispatcher` routing logic, intent classification heuristics, and grounding augmentation.
+- 🧪 `tests/test_services.py`: Django HTTP client, Redis memory failover, and `LLMClientService` exponential backoff retries.
+- 🧪 `tests/test_schemas.py`: Strict type validation and JSON serialization with Pydantic v2.
+- 🧪 `tests/test_docker_and_infra.py`: Static verification of `Dockerfile` (non-root `appuser`), `render.yaml` IaC blueprint, and `keep_alive.py` utility.
+- 🧪 `tests/test_health.py`: Health probes, dependency reporting, and CORS preflight options.
 
 ---
 
-## 🚢 Despliegue en Producción (Render IaC Blueprint)
+## 🚢 Production Deployment (Render IaC Blueprint)
 
-El repositorio incluye la configuración de Infraestructura como Código lista para desplegar en un solo clic mediante **Render Blueprints** ([`render.yaml`](file:///render.yaml)):
+The repository provides automated Infrastructure-as-Code (IaC) via **Render Blueprints** ([`render.yaml`](file:///render.yaml)):
 
-1. Ve a tu [Render Dashboard](https://dashboard.render.com/) y selecciona **New + > Blueprint**.
-2. Conecta este repositorio. Render detectará automáticamente el archivo `render.yaml` y configurará el servicio web Docker.
-3. Configura tus secretos (`GEMINI_API_KEY`, `REDIS_URL`, etc.) en la pestaña **Environment**.
-4. ¡Listo! Cada `git push` a `main` disparará un despliegue automático con zero-downtime.
+1. In your [Render Dashboard](https://dashboard.render.com/), click **New + > Blueprint**.
+2. Connect this repository. Render will automatically parse `render.yaml` and provision the Docker web service.
+3. Provide your environment secrets (`GEMINI_API_KEY`, `REDIS_URL`, etc.) under the **Environment** tab.
+4. Continuous Deployment is active: every `git push` to `main` executes a zero-downtime rolling update.
 
-> 📚 *Consulta la [Guía Integral de Despliegue en Render](docs/deployment_render.md) para detalles avanzados de optimización de Uvicorn y configuración SSL.*
+> 📚 *For advanced Uvicorn timeout configuration and SSL setup, read the [Render Deployment Guide](docs/deployment_render.md).*
 
 ---
 
-## 👤 Sobre el Autor & Contacto
+## 👤 Author & Contact
 
-Este proyecto fue desarrollado como parte de un portafolio profesional de ingeniería de software, enfocado en demostrar maestría en arquitecturas de backend distribuidas, analítica de datos aplicada a IA, microservicios asíncronos y automatización de infraestructura.
+This project is part of a professional software engineering and AI systems portfolio, showcasing expertise in distributed backend architecture, business intelligence automation, asynchronous microservices, and modern DevOps.
 
-- **Autor**: Facundo
-- **Rol**: Senior Software & AI Engineer (Fullstack / Backend / Data & AI)
-- **Especialidades**: Python, FastAPI, Django, Google GenAI / LLM Orchestration, Redis, Docker, CI/CD, React, TypeScript.
+- **Author**: Facundo
+- **Role**: Senior Software & AI Engineer (Fullstack / Backend / Data & AI)
+- **Core Competencies**: Python, FastAPI, Django, Google GenAI / LLM Orchestration, Redis, Docker, CI/CD, React, TypeScript.
 - **GitHub**: [github.com/waycold](https://github.com/waycold)
 
 ---
 
 <div align="center">
-  <sub>Desarrollado con pasión y estándares de ingeniería industrial. Si este proyecto te resultó útil o interesante, ¡no dudes en dejar una ⭐️ en el repositorio!</sub>
+  <sub>Engineered with passion and industry-grade software practices. If you find this project valuable, please consider leaving a ⭐️ on the repository!</sub>
 </div>
