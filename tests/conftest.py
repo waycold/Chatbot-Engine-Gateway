@@ -318,7 +318,7 @@ def sample_chat_response_payload() -> dict[str, Any]:
         "session_id": "sess_test_qa_001",
         "message": "Cuento con más de 6 años de experiencia en arquitecturas cloud y Python...",
         "metadata": {
-            "model": "gemini-2.5-flash",
+            "model": "gemini-3.7-flash",
             "tokens_used": 128,
             "latency_ms": 245.5,
         },

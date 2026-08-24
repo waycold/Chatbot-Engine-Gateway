@@ -242,6 +242,7 @@ class TestLLMClientService:
         assert models[0] == "gemini-custom"
         assert "gemini-3.7-flash" in models
         assert "gemini-3.5-flash-lite" in models
+        assert "gemini-3.1-pro-preview" in models
 
     def test_llm_client_fallback_distinguishes_missing_key_vs_configured_key(self) -> None:
         """Verifies that fallback message does not falsely claim unconfigured key when key is set."""
@@ -264,7 +265,7 @@ class TestLLMClientService:
 
         # Call mock generate_content
         response = service._client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3.7-flash",
             contents="Hola Gemini",
         )
         assert response.text == "Hola, soy el agente de IA. ¿En qué puedo ayudarte?"
@@ -277,7 +278,7 @@ class TestLLMClientService:
         service._client = mock_genai_client
 
         stream_gen = service._client.models.generate_content_stream(
-            model="gemini-2.5-flash",
+            model="gemini-3.7-flash",
             contents="Dame una introducción",
         )
 
@@ -295,7 +296,7 @@ class TestLLMClientService:
         service._client = mock_client
 
         with pytest.raises(Exception) as exc_info:
-            service._client.models.generate_content(model="gemini-2.5-flash", contents="Test")
+            service._client.models.generate_content(model="gemini-3.7-flash", contents="Test")
         assert "429 RESOURCE_EXHAUSTED" in str(exc_info.value)
 
 

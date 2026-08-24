@@ -117,3 +117,5 @@ $RECYCLE.BIN/
 tmp/
 temp/
 scratch/
+test_results_summary.json
+*.tmp

@@ -25,7 +25,7 @@ Interfaz de usuario moderna, fluida y responsiva para el Chatbot de IA y Gateway
    - ⚡ **Latencia:** Mide el tiempo de respuesta inicial / TTFT (*Time to First Token*) en milisegundos.
    - 🔤 **Tokens:** Contador acumulado en tiempo real.
    - 🚀 **Velocidad:** Cálculo de tokens por segundo (`tok/s`).
-   - 🧠 **Modelo:** Indicador del modelo activo (`gemini-2.0-flash`).
+   - 🧠 **Modelo:** Indicador del modelo activo (`gemini-3.7-flash`).
    - 📡 **Canal SSE:** Indicador pulsante de estado de conexión Server-Sent Events.
 3. **Barra de Accesos Rápidos de Analytics (`analytics-quick-strip`)**:
    - 📈 **Resumen de Ventas:** Resumen ejecutivo de ventas y facturación trimestral.

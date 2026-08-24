@@ -9,15 +9,15 @@
 [![Redis](https://img.shields.io/badge/Redis-Distributed%20Memory-DC382D?style=for-the-badge&logo=redis&logoColor=white)](https://redis.io)
 [![Docker](https://img.shields.io/badge/Docker-Multi--Stage%20Build-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
 [![Render](https://img.shields.io/badge/Deploy-Render%20IaC-46E3B7?style=for-the-badge&logo=render&logoColor=white)](https://render.com)
-[![Tests](https://img.shields.io/badge/Tests-90%2F90%20Passed-brightgreen?style=for-the-badge&logo=pytest&logoColor=white)](https://pytest.org)
+[![Tests](https://img.shields.io/badge/Tests-All%20Passed-brightgreen?style=for-the-badge&logo=pytest&logoColor=white)](https://pytest.org)
 
 <p align="center">
-  <b>A production-grade AI microservice engineered for autonomous multi-agent orchestration, natural language Data Analytics & BI querying, ultra-low latency Server-Sent Events (SSE) streaming, and resilient cloud automation.</b>
+  <b>A production-grade AI microservice engineered for autonomous multi-agent orchestration, natural language Data Analytics & BI querying, hybrid markdown knowledge base grounding, ultra-low latency Server-Sent Events (SSE) streaming, and resilient cloud automation.</b>
 </p>
 
 ---
 
-[🚀 Quickstart](#-quickstart-guide) • [🏛️ Architecture](#-system-architecture) • [📊 Data Analytics & BI](#-data-analytics--business-intelligence-engine) • [🤖 Multi-Agent System](#-multi-agent-system--routing) • [⚙️ Automation & Resilience](#-automation--production-resilience) • [🎨 Drop-in Chat Widget](#-frontend--shadow-dom-drop-in-widget) • [📡 API Reference](#-api-specification)
+[🚀 Quickstart](#-quickstart-guide) • [🏛️ Architecture](#-system-architecture) • [📊 Data Analytics & BI](#-data-analytics--business-intelligence-engine) • [🤖 Multi-Agent System](#-multi-agent-system--routing) • [🛠️ 8 Specialized Internal Tools](#-8-specialized-internal-tools--function-calling) • [📖 Hybrid Knowledge Base](#-hybrid-knowledge-base--rag-grounding) • [⚙️ Production Resilience](#-automation--production-resilience) • [📡 API Reference](#-api-specification)
 
 ---
 
@@ -29,8 +29,10 @@
 
 This project demonstrates core competencies in **Modern Software Engineering**, **Automated Data Analytics & Business Intelligence**, **LLM Multi-Agent Orchestration**, and **Cloud Infrastructure Automation**:
 
-- 📈 **Natural Language Data Analytics & BI**: Instant querying of business KPIs, conversion funnels, sales trends, demand forecasting, and executive reporting with JWT-based Role-Based Access Control (RBAC).
+- 📈 **Natural Language Data Analytics & BI**: Instant querying of business KPIs, conversion funnels, sales trends, inventory health, profit margins, RFM customer segmentation, reviews sentiment, and safe SQL execution with role-based JWT checks.
 - 🤖 **Autonomous Multi-Agent Architecture**: Intelligent intent classification engine routing queries dynamically across specialized domain agents (`analytics`, `ecommerce`, `portfolio`).
+- 📖 **Hybrid Knowledge Base Grounding**: Dual-context augmentation combining editable Markdown business policies (`data/ecommerce_business_context.md`) with real-time transactional database queries.
+- 🛠️ **8 Internal Function Calling Tools**: Full integration with Django internal endpoints for automated data extraction and LLM grounding.
 - ⚡ **High-Concurrency SSE Streaming**: Real-time token streaming via Server-Sent Events (`text/event-stream`) backed by automatic *Exponential Backoff + Jitter* resilience against upstream API rate limits (429/503).
 - 🧠 **Distributed Session Memory**: Multi-turn conversation state persistence via Redis with auto-expiring TTL and an automated in-memory fallback store (*Zero-Downtime Resilience*).
 - 🔄 **Automated Telemetry & Anti-Cold-Start**: Zero-dependency Python health script and GitHub Actions cron workflow measuring latency (RTT) and preventing cloud server spin-downs.
@@ -58,17 +60,21 @@ flowchart TD
         
         subgraph Agents["🤖 Specialized AI Agents"]
             AgPortfolio["💼 Portfolio Agent<br/>(CV, Tech Stack & Projects)"]
-            AgEcom["🛍️ E-Commerce Agent<br/>(Catalog Search & Quotes)"]
-            AgAnalytics["📊 Analytics Agent<br/>(KPIs, Revenue & Forecasting)"]
+            AgEcom["🛍️ E-Commerce Agent<br/>(Hybrid KB + Catalog Search)"]
+            AgAnalytics["📊 Analytics Agent<br/>(8 Specialized Tools & BI)"]
         end
 
-        LLMService["🧠 LLM Engine (Google GenAI / Gemini 3.7 Flash)<br/>• Exponential Backoff & Jitter Interceptor<br/>• Asynchronous SSE Token Streamer"]
+        subgraph KnowledgeBase["📖 Knowledge Base"]
+            KBDoc["📄 data/ecommerce_business_context.md<br/>(Policies, Shipping, Refunds, FAQs)"]
+        end
+
+        LLMService["🧠 LLM Engine (Google GenAI SDK)<br/>• gemini-3.7-flash (Default)<br/>• gemini-3.5-flash-lite / gemini-3.1-pro-preview<br/>• Exponential Backoff & Jitter Interceptor<br/>• Asynchronous SSE Token Streamer"]
     end
 
     subgraph StateAndBackend["💾 Data Layer & External Backends"]
         direction TB
         Redis["🔴 Redis Session Store (TTL Expiration)<br/>+ In-Memory Resilience Fallback"]
-        DjangoMonolith["🐍 Django Core Backend (Auth JWT & Business DB)"]
+        DjangoMonolith["🐍 Django Core Backend<br/>(Auth JWT, Catalog & 8 Internal Endpoints)"]
         GeminiAPI["☁️ Google AI Studio API (Gemini Cloud)"]
     end
 
@@ -82,8 +88,9 @@ flowchart TD
     Router -->|Intent: analytics| AgAnalytics
 
     AgPortfolio -->|RAG Grounding| DjangoMonolith
+    AgEcom -->|Load Markdown Policies| KBDoc
     AgEcom -->|Catalog Search Query| DjangoMonolith
-    AgAnalytics -->|Metric Query & JWT Validation| DjangoMonolith
+    AgAnalytics -->|8 Specialized Internal Endpoints| DjangoMonolith
 
     AgPortfolio & AgEcom & AgAnalytics -->|Retrieve History & Save Turn| Redis
     AgPortfolio & AgEcom & AgAnalytics -->|Inference Request| LLMService
@@ -94,65 +101,64 @@ flowchart TD
 
 ---
 
-## 📊 Data Analytics & Business Intelligence Engine
+## 🛠️ 8 Specialized Internal Tools & Function Calling
 
-The `AnalyticsAgent` (`app/agents/analytics.py`) serves as an automated **Business Intelligence & Data Analyst Copilot**. It interprets user prompts in natural language, resolves analytical metrics from backend data sources, and generates structured executive reports.
+The gateway connects with Django's internal API via `X-Internal-Secret` authentication to expose 8 specialized analytical and catalog tools:
 
-```
-                  ┌────────────────────────────────────────────────────────┐
-                  │ 💬 User: "Show me monthly sales KPIs and conversion"   │
-                  └───────────────────────────┬────────────────────────────┘
-                                              ▼
-                  ┌────────────────────────────────────────────────────────┐
-                  │ 🧠 Intent Classifier: 'analytics' (Focus: 'kpis')      │
-                  └───────────────────────────┬────────────────────────────┘
-                                              ▼
-                  ┌────────────────────────────────────────────────────────┐
-                  │ 🔐 JWT Token RBAC Validation (Roles: analyst / admin)  │
-                  └───────────────────────────┬────────────────────────────┘
-                                              ▼
-                  ┌────────────────────────────────────────────────────────┐
-                  │ 📈 Query Backend: /api/v1/internal/analytics/metrics   │
-                  └───────────────────────────┬────────────────────────────┘
-                                              ▼
-┌───────────────────────────────────────────────────────────────────────────────────────────┐
-│ 📊 Generated Executive Report (Markdown Tables + Decision Insights):                       │
-│                                                                                           │
-│ | Core Metric               | Current Value  | MoM Variation   | Status                   │
-│ | :------------------------ | :------------- | :-------------- | :----------------------- │
-│ | **Gross Revenue (GMV)**   | $54,200.00 USD | +14.2% 🟢       | Exceeding Monthly Target │
-│ | **Daily Active Users**    | 1,520 DAU      | +8.5% 🟢        | Sustained Growth         │
-│ | **Conversion Rate**       | 3.8%           | +0.4pp 🟢       | Optimal Range            │
-│                                                                                           │
-│ 💡 **Executive Takeaway**: 62% of transaction volume originates from Cloud AI Training...  │
-└───────────────────────────────────────────────────────────────────────────────────────────┘
-```
+| # | Tool Name | HTTP Endpoint | Description & Capabilities |
+|---|---|---|---|
+| **1** | `query_sales_analytics` | `GET /api/v1/internal/analytics/query/` | Dynamic sales query with ad-hoc aggregations (revenue, units, costs, gross margins) by dimension. |
+| **2** | `get_inventory_health` | `GET /api/v1/internal/inventory/health/` | Inventory health, critical stock alerts, out-of-stock items, total valuation, and 30-day Runout Rate. |
+| **3** | `get_product_profitability` | `GET /api/v1/internal/analytics/margins/` | Gross margin % ranking (((Sales - Costs)/Sales)*100) grouped by product, category, or brand. |
+| **4** | `get_funnel_and_cart_metrics` | `GET /api/v1/internal/analytics/funnel/` | E-commerce conversion funnel, cart abandonment rates, top abandoned products, and coupon ROI. |
+| **5** | `get_customer_reviews_summary` | `GET /api/v1/internal/catalog/reviews-summary/` | Customer reviews sentiment summary, 1-5 star ratings distribution, and critical feedback alerts. |
+| **6** | `get_customer_segmentation` | `GET /api/v1/internal/customers/insights/` | RFM customer segmentation (VIPs, At-Risk >60d, New <30d), Customer LTV, and regional stats. |
+| **7** | `semantic_catalog_search` | `POST /api/v1/internal/catalog/semantic-search/` | Conceptual intent search in product catalog with cumulative relevance scoring. |
+| **8** | `execute_raw_sql_sandbox` | `POST /api/v1/internal/query/raw-read/` | Defensive read-only SELECT execution (max 50 rows, timeout 2.0s, DDL/DML rejection). |
 
-### 🔍 Supported Analytical Dimensions
-- **Executive Summaries (`overview`)**: Core business KPIs (Daily Active Users, Gross Merchandise Value, bounce and conversion rates).
-- **Top Performing Products (`top_products`)**: High-margin product identification, sales velocity, and inventory turnover.
-- **Category Revenue Distribution (`category_distribution`)**: Share of wallet and revenue breakdown across service lines.
-- **Predictive Forecasting & Trends (`forecast`)**: Qualitative and quantitative trend analysis across configurable horizons (`7d`, `30d`, `90d`, `1y`).
-- **Granular RBAC Security**: JWT authorization verification preventing unauthenticated access to confidential company metrics.
+---
+
+## 📖 Hybrid Knowledge Base & RAG Grounding
+
+The `EcommerceAgent` uses a **Hybrid Grounding Architecture**:
+1. **Business Knowledge Base (`data/ecommerce_business_context.md`)**:
+   - Structured markdown document containing company information, shipping & delivery times, refund/cancellation policies (14-day money back guarantee), accepted payment methods (credit cards, bank transfer with 10% discount, crypto), FAQs, and support channels.
+   - Cached in-memory via `KnowledgeBaseService` with timestamp (`mtime`) awareness to reflect live document updates without server reboots.
+2. **Live Database Catalog Grounding**:
+   - Real-time queries to Django for live product pricing, currencies, technical descriptions, stock, and customer reviews.
+3. **Hybrid Assembly**:
+   ```
+   === 1. BUSINESS CONTEXT & COMPANY POLICIES (MARKDOWN) ===
+   {markdown_business_context}
+
+   === 2. LIVE DATABASE / CATALOG DATA (DJANGO API) ===
+   {live_catalog_json}
+   ```
 
 ---
 
 ## 🤖 Multi-Agent System & Routing
 
-The gateway provides a modular and extensible orchestration system (`AgentDispatcher`) designed for clear separation of concerns:
+The gateway provides a modular orchestration system (`AgentDispatcher`) designed for clear separation of concerns:
 
 | Agent | Identifier | Domain & Specialization | Key Capabilities |
 | :--- | :---: | :--- | :--- |
-| **Analytics & BI** | `analytics` | Business intelligence, sales performance, traffic metrics, and executive summaries. | `kpi_metrics`, `sales_reporting`, `conversion_funnel`, `forecast` |
-| **E-Commerce & Catalog** | `ecommerce` | Contextual catalog search (RAG), real-time stock verification, pricing, and purchase guidance. | `product_search`, `price_inquiry`, `stock_check`, `purchase_guidance` |
+| **Analytics & BI** | `analytics` | Business intelligence, sales performance, traffic metrics, inventory health, margins, and SQL sandbox. | `sales_analytics`, `inventory_health`, `product_profitability`, `conversion_funnel`, `customer_rfm_segmentation`, `safe_sql_sandbox` |
+| **E-Commerce & Catalog** | `ecommerce` | Hybrid business knowledge, contextual catalog search, real-time stock, pricing, reviews, and purchase guidance. | `product_search`, `semantic_search`, `price_inquiry`, `stock_check`, `shipping_policies`, `refund_policies`, `payment_methods` |
 | **Portfolio & Tech CV** | `portfolio` | Professional background, live tech stack showcase, architectural design review, and contact info. | `cv_inquiry`, `skills_overview`, `projects_showcase`, `architecture_consulting` |
 | **Auto-Router** | `auto` | Heuristic & semantic classifier that automatically resolves and delegates messages to the optimal agent. | `intent_classification`, `fallback_routing` |
 
-### 🛠️ Context Augmentation Pipeline (RAG)
-Every agent implements the `get_context_augmentation()` hook:
-1. Multi-turn session context is pulled from `RedisMemoryService`.
-2. Dynamic external domain data (e.g., product catalog, analytics KPIs, CV records) is injected into the payload.
-3. A structured, domain-constrained system prompt ensures fact-grounded responses and mitigates LLM hallucinations.
+---
+
+## 🧠 Google GenAI SDK & Model Hierarchy
+
+The microservice integrates the official `google-genai` Python SDK with support for the latest Gemini 3.x series models:
+
+| Model | Role | Configuration |
+| :--- | :--- | :--- |
+| **`gemini-3.7-flash`** | Default primary model | Optimal balance of agentic reasoning, function calling, speed, and accuracy. |
+| **`gemini-3.5-flash-lite`** | High-throughput fallback | Maximum generation speed and low operational latency. |
+| **`gemini-3.1-pro-preview`** | Deep reasoning fallback | Complex analytical calculations and advanced code generation. |
 
 ---
 
@@ -162,7 +168,6 @@ Every agent implements the `get_context_augmentation()` hook:
 To optimize cloud infrastructure costs on serverless or eco-tier hosting (e.g., Render Free/Eco tier with 15-minute idle spin-down):
 - **Automated CI/CD Workflow**: [`.github/workflows/keep_alive.yml`](file:///.github/workflows/keep_alive.yml) triggers health probes every 10 minutes.
 - **Zero-Dependency Python Utility**: [`scripts/keep_alive.py`](file:///scripts/keep_alive.py) runs on pure standard library (`urllib.request`), measuring exact Round-Trip Time (RTT) in milliseconds with configurable exponential retries.
-- **GitHub Step Summary Reports**: Real-time health statuses and response latencies are automatically published to the GitHub Actions dashboard.
 
 ### 2. 🛡️ LLM Fault Tolerance (Exponential Backoff with Jitter)
 The [`LLMClientService`](file:///app/services/llm_client.py) includes an automated retry interceptor:
@@ -171,38 +176,6 @@ The [`LLMClientService`](file:///app/services/llm_client.py) includes an automat
 
 ### 3. 💾 Dual-Tier Session Memory
 If Redis encounters network partitions or downtime, the gateway seamlessly falls back to an in-memory session store (`InMemoryFallbackStore`), maintaining zero downtime for ongoing conversations.
-
----
-
-## 🎨 Frontend & Shadow DOM Drop-in Widget
-
-The repository includes a modern, zero-dependency UI suite built with semantic HTML5, modern tokenized CSS, and asynchronous ES6+ JavaScript:
-
-```
-frontend/
-├── index.html         # Full-Screen standalone chat interface with agent picker and health badges
-├── chat-widget.js     # Universal Drop-in chat widget isolated via Shadow DOM (zero CSS collisions)
-├── styles.css         # Modern design tokens, slate/zinc dark theme, and fluid responsive layouts
-├── app.js             # Async SSE stream handler, native Markdown parser, and session manager
-└── demo.html          # Simulated host portal demonstrating one-line drop-in widget integration
-```
-
-### 🔌 Single-Line Widget Integration
-Drop the widget into any existing template (Django, React, Next.js, WordPress, or static HTML):
-
-```html
-<script 
-  src="https://your-domain.com/chat-widget.js" 
-  data-api-url="https://your-gateway.onrender.com"
-  data-agent="portfolio"
-></script>
-```
-
-#### Widget Highlights:
-- 🛡️ **Shadow DOM Encapsulation**: Host application CSS styles will never bleed into or break the chat widget.
-- 🌊 **Real-Time Token Rendering**: Consumes `ReadableStream` chunks with typing cursor animations and clean `AbortController` cancellation.
-- 📝 **Built-in Markdown & Code Engine**: Renders tables, lists, and code blocks with an interactive **"Copy Code"** button.
-- 🟢 **Live Health Beacon**: Continuous monitoring against `/health` (states: Online / Verifying / Offline).
 
 ---
 
@@ -220,49 +193,6 @@ Drop the widget into any existing template (Django, React, Next.js, WordPress, o
 | `GET` | `/health` | Ultralight healthcheck (zero external dependency calls). | Public |
 | `GET` | `/health/details` | Deep dependency check (verifies Redis and Django connectivity). | Public |
 | `GET` | `/ping` | Minimal latency validation endpoint returning `{"ping": "pong"}`. | Public |
-
----
-
-### Request & Response Examples
-
-#### 1. Real-Time SSE Streaming (`curl`)
-```bash
-curl -N -X POST "http://localhost:8000/api/v1/chat/stream" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "agent_id": "analytics",
-    "session_id": "sess_analytics_01",
-    "message": "What were our top-performing products and revenue trends this month?",
-    "stream": true
-  }'
-```
-
-**SSE Event-Stream Output:**
-```text
-data: {"token":"📊 ","agent_id":"analytics","session_id":"sess_analytics_01","done":false}
-
-data: {"token":"Executive ","agent_id":"analytics","session_id":"sess_analytics_01","done":false}
-
-data: {"token":"Summary:","agent_id":"analytics","session_id":"sess_analytics_01","done":false}
-
-...
-
-data: {"token":"","agent_id":"analytics","session_id":"sess_analytics_01","done":true,"metadata":{"total_tokens_yielded":145,"latency_ms":310.5,"agent_name":"Analytics & Business Metrics Agent"}}
-
-data: [DONE]
-```
-
-#### 2. Synchronous JSON Completion
-```bash
-curl -X POST "http://localhost:8000/api/v1/chat" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "agent_id": "ecommerce",
-    "session_id": "sess_ecom_01",
-    "message": "Do you offer microservices architecture consulting sessions?",
-    "stream": false
-  }'
-```
 
 ---
 
@@ -290,6 +220,7 @@ cp .env.example .env
 | :--- | :--- | :--- |
 | `GEMINI_API_KEY` | Google AI Studio / Gemini API Key | `AIzaSyD...` |
 | `DEFAULT_MODEL` | Default LLM model identifier | `gemini-3.7-flash` |
+| `ECOMMERCE_CONTEXT_PATH` | Path to Markdown business context | `data/ecommerce_business_context.md` |
 | `REDIS_URL` | Redis connection URI | `redis://localhost:6379/0` or `rediss://...` |
 | `INTERNAL_API_SECRET` | Shared secret for inter-service authentication | `your_secure_internal_token` |
 | `DJANGO_BACKEND_URL` | Base URL of transactional Django backend | `http://localhost:8000` |
@@ -313,45 +244,17 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 - 📖 **Interactive Swagger UI**: [http://localhost:8000/docs](http://localhost:8000/docs)
 - 🔍 **OpenAPI Specification**: [http://localhost:8000/openapi.json](http://localhost:8000/openapi.json)
-- 🖥️ **Frontend Demo**: Open [`frontend/index.html`](file:///frontend/index.html) in your browser or run `python -m http.server 3000 --directory frontend`.
-
-### 4. Running with Docker
-
-Build and run using the optimized multi-stage container:
-```bash
-# Build Docker image
-docker build -t ai-agent-gateway:latest .
-
-# Run containerized service
-docker run -d --name ai-gateway \
-  -p 8000:8000 \
-  --env-file .env \
-  ai-agent-gateway:latest
-```
+- 🖥️ **Frontend Demo**: Open [`frontend/index.html`](file:///frontend/index.html) in your browser.
 
 ---
 
 ## 🧪 Test Suite & Code Quality
 
-The codebase enforces strict code quality and high reliability across schema validations, agent dispatchers, mock network handlers, and infrastructure configurations.
+The test suite validates schema integrity, agent dispatching, 8 internal endpoints, Markdown knowledge loading, and error boundaries:
 
 ```bash
-# Execute comprehensive pytest suite
 pytest
 ```
-
-**Test Execution Results:**
-```text
-============================= 90 passed in 16.68s =============================
-```
-
-### Test Coverage Breakdown:
-- 🧪 `tests/test_api_chat.py`: REST and SSE endpoints, payload validation errors (422), rate limiting, and exception boundaries.
-- 🧪 `tests/test_agents.py`: `AgentDispatcher` routing logic, intent classification heuristics, and grounding augmentation.
-- 🧪 `tests/test_services.py`: Django HTTP client, Redis memory failover, and `LLMClientService` exponential backoff retries.
-- 🧪 `tests/test_schemas.py`: Strict type validation and JSON serialization with Pydantic v2.
-- 🧪 `tests/test_docker_and_infra.py`: Static verification of `Dockerfile` (non-root `appuser`), `render.yaml` IaC blueprint, and `keep_alive.py` utility.
-- 🧪 `tests/test_health.py`: Health probes, dependency reporting, and CORS preflight options.
 
 ---
 
@@ -364,13 +267,9 @@ The repository provides automated Infrastructure-as-Code (IaC) via **Render Blue
 3. Provide your environment secrets (`GEMINI_API_KEY`, `REDIS_URL`, etc.) under the **Environment** tab.
 4. Continuous Deployment is active: every `git push` to `main` executes a zero-downtime rolling update.
 
-> 📚 *For advanced Uvicorn timeout configuration and SSL setup, read the [Render Deployment Guide](docs/deployment_render.md).*
-
 ---
 
 ## 👤 Author & Contact
-
-This project is part of a professional software engineering and AI systems portfolio, showcasing expertise in distributed backend architecture, business intelligence automation, asynchronous microservices, and modern DevOps.
 
 - **Author**: Facundo
 - **Role**: Senior Software & AI Engineer (Fullstack / Backend / Data & AI)

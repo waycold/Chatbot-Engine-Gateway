@@ -125,7 +125,7 @@ class TestChatResponseSchema:
     def test_valid_chat_response_with_custom_metadata(self) -> None:
         """Verifies ChatResponse with detailed metadata dictionary."""
         metadata = {
-            "model": "gemini-2.5-flash",
+            "model": "gemini-3.7-flash",
             "prompt_tokens": 50,
             "candidate_tokens": 120,
             "latency_ms": 312.4,
@@ -137,7 +137,7 @@ class TestChatResponseSchema:
             message="Detalle de servicios",
             metadata=metadata,
         )
-        assert res.metadata["model"] == "gemini-2.5-flash"
+        assert res.metadata["model"] == "gemini-3.7-flash"
         assert res.metadata["latency_ms"] == 312.4
         assert len(res.metadata["tools_called"]) == 2
 

@@ -282,7 +282,7 @@
       this.isConnected = false;
       this.abortController = null;
       this._healthCheckTimer = null;
-      this.currentModel = 'gemini-2.0-flash';
+      this.currentModel = 'gemini-3.7-flash';
 
       // Performance Metrics Tracking
       this.metrics = {

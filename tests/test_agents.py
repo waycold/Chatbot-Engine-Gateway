@@ -24,7 +24,7 @@ class MockPortfolioAgent(BaseAgent):
             agent_id=self.agent_id,
             session_id=request.session_id,
             message=f"[Portfolio] Información para: '{request.message}'",
-            metadata={"agent": "portfolio", "model": "gemini-2.5-flash"},
+            metadata={"agent": "portfolio", "model": "gemini-3.7-flash"},
         )
 
     async def process_stream(self, request: ChatRequest) -> AsyncGenerator[str, None]:
@@ -505,4 +505,88 @@ class TestEcommerceAgentAdvancedTools:
         assert results["status"] == "success"
         assert len(results["items"]) <= 2
         assert "name" in results["items"][0]
+
+
+# ==============================================================================
+# Analytics Agent Temporal & Date Range Extraction Tests (Ticket QA-05)
+# ==============================================================================
+
+class TestAnalyticsAgentDateRangeExtraction:
+    """Test suite for AnalyticsAgent._extract_date_range natural-language temporal parsing."""
+
+    def test_extract_explicit_iso_date_range(self) -> None:
+        """Verifies parsing of explicit ISO date ranges."""
+        d_from, d_to = AnalyticsAgent._extract_date_range("ventas desde 2025-01-01 hasta 2025-03-31")
+        assert d_from == "2025-01-01"
+        assert d_to == "2025-03-31"
+
+    def test_extract_named_month_and_year_spanish(self) -> None:
+        """Verifies parsing of Spanish month + year phrases."""
+        d_from, d_to = AnalyticsAgent._extract_date_range("reporte de ventas de diciembre de 2025")
+        assert d_from == "2025-12-01"
+        assert d_to == "2025-12-31"
+
+        d_from2, d_to2 = AnalyticsAgent._extract_date_range("ingresos de febrero 2024")
+        assert d_from2 == "2024-02-01"
+        assert d_to2 == "2024-02-29"  # 2024 is a leap year
+
+    def test_extract_named_month_and_year_english(self) -> None:
+        """Verifies parsing of English month + year phrases."""
+        d_from, d_to = AnalyticsAgent._extract_date_range("sales in january 2025")
+        assert d_from == "2025-01-01"
+        assert d_to == "2025-01-31"
+
+    def test_extract_quarter_format(self) -> None:
+        """Verifies parsing of quarter expressions."""
+        d_from, d_to = AnalyticsAgent._extract_date_range("kpis del Q1 2025")
+        assert d_from == "2025-01-01"
+        assert d_to == "2025-03-31"
+
+        d_from_q3, d_to_q3 = AnalyticsAgent._extract_date_range("tercer trimestre 2024")
+        assert d_from_q3 == "2024-07-01"
+        assert d_to_q3 == "2024-09-30"
+
+    def test_extract_relative_year(self) -> None:
+        """Verifies parsing of relative year keywords."""
+        from datetime import date
+        today = date.today()
+
+        # Last year
+        d_from_ly, d_to_ly = AnalyticsAgent._extract_date_range("balance del año pasado")
+        assert d_from_ly == f"{today.year - 1}-01-01"
+        assert d_to_ly == f"{today.year - 1}-12-31"
+
+        # This year
+        d_from_ty, d_to_ty = AnalyticsAgent._extract_date_range("ingresos de este año")
+        assert d_from_ty == f"{today.year}-01-01"
+        assert d_to_ty == f"{today.year}-12-31"
+
+    def test_extract_relative_month(self) -> None:
+        """Verifies parsing of relative month keywords."""
+        d_from, d_to = AnalyticsAgent._extract_date_range("ventas de este mes")
+        assert d_from is not None
+        assert d_to is not None
+        assert d_from.endswith("-01")
+
+    def test_extract_no_dates_returns_none(self) -> None:
+        """Verifies that non-temporal inquiries return (None, None)."""
+        d_from, d_to = AnalyticsAgent._extract_date_range("balance general de productos")
+        assert d_from is None
+        assert d_to is None
+
+    @pytest.mark.asyncio
+    async def test_analytics_agent_temporal_context_injection(self) -> None:
+        """Verifies that detected_date_range is injected into context_data when dates are present."""
+        agent = AnalyticsAgent()
+        req = ChatRequest(
+            agent_id="analytics",
+            session_id="sess_temp_01",
+            message="Ingresos y ventas de diciembre de 2025 por categoría",
+        )
+        context = await agent.get_context_augmentation(req)
+        assert context is not None
+        assert "detected_date_range" in context
+        assert "2025-12-01" in context
+        assert "2025-12-31" in context
+
 

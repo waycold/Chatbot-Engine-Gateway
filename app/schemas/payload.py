@@ -76,7 +76,7 @@ class ChatResponse(BaseModel):
     metadata: dict[str, Any] = Field(
         default_factory=dict,
         description="Execution metadata (model, latency, tool calls, token usage)",
-        examples=[{"model": "gemini-2.5-flash", "intent": "portfolio_skills", "latency_ms": 280}],
+        examples=[{"model": "gemini-3.7-flash", "intent": "portfolio_skills", "latency_ms": 280}],
     )
 
     model_config = ConfigDict(
@@ -87,7 +87,7 @@ class ChatResponse(BaseModel):
                 "session_id": "sess_abc12345",
                 "message": "Cuento con amplia experiencia en Python, FastAPI, Django y arquitecturas de microservicios.",
                 "metadata": {
-                    "model": "gemini-2.5-flash",
+                    "model": "gemini-3.7-flash",
                     "intent": "portfolio_skills",
                     "latency_ms": 245,
                 },
