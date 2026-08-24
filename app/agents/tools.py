@@ -49,7 +49,7 @@ ANALYTICS_TOOL_DECLARATIONS = [
     },
     {
         "name": "get_product_profitability",
-        "description": "Calcula y consulta el ranking de rentabilidad y margen bruto % (((Ventas - Costos)/Ventas)*100) por producto o categoría.",
+        "description": "Calcula y consulta el ranking de rentabilidad y margen bruto % (((Ventas - Costos)/Ventas)*100) por producto o categoría. Acepta filtros de fecha para acotar el análisis a un periodo específico (mes, trimestre, año).",
         "parameters": {
             "type": "OBJECT",
             "properties": {
@@ -61,6 +61,14 @@ ANALYTICS_TOOL_DECLARATIONS = [
                 "limit": {
                     "type": "INTEGER",
                     "description": "Cantidad máxima de elementos en el ranking",
+                },
+                "date_from": {
+                    "type": "STRING",
+                    "description": "Fecha de inicio en formato YYYY-MM-DD (opcional). Usa cuando el usuario pida datos de un periodo concreto.",
+                },
+                "date_to": {
+                    "type": "STRING",
+                    "description": "Fecha de fin en formato YYYY-MM-DD (opcional). Usa cuando el usuario pida datos de un periodo concreto.",
                 },
             },
         },
@@ -192,6 +200,8 @@ async def execute_tool(
             return await django_service.get_product_profitability(
                 group_by=tool_args.get("group_by", "product"),
                 limit=int(tool_args.get("limit", 10)),
+                date_from=tool_args.get("date_from"),
+                date_to=tool_args.get("date_to"),
                 user_token=user_token,
             )
 

@@ -332,13 +332,19 @@ class DjangoAPIService:
         self,
         group_by: str = "product",
         limit: int = 10,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
         user_token: Optional[str] = None,
     ) -> dict[str, Any]:
         """Queries profitability and gross margins aggregated by product, category, brand or supplier.
 
         Endpoint: GET /api/v1/internal/analytics/margins/
         """
-        params = {"group_by": group_by, "limit": limit}
+        params: dict[str, Any] = {"group_by": group_by, "limit": limit}
+        if date_from:
+            params["date_from"] = date_from
+        if date_to:
+            params["date_to"] = date_to
         headers: dict[str, str] = {}
         if user_token:
             headers["Authorization"] = f"Bearer {user_token}"
@@ -364,6 +370,7 @@ class DjangoAPIService:
             ][:limit],
             "source": "Django Margins Analytics Engine (Fallback)",
         }
+
 
     # 4. Funnel & Cart Metrics (get_funnel_and_cart_metrics)
     async def get_funnel_and_cart_metrics(
