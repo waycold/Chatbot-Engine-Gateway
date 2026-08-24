@@ -131,21 +131,31 @@ class AnalyticsAgent(BaseAgent):
                 last_day = calendar.monthrange(y, qm_end)[1]
                 return f"{y}-{qm_start:02d}-01", f"{y}-{qm_end:02d}-{last_day}"
 
-        # Named month + year: "diciembre del año pasado", "diciembre 2025", "december 2024"
+        # Named month + year: "diciembre del año pasado", "december of last year", "diciembre 2025", "december 2024"
         for month_name, m_num in MONTHS.items():
-            # "mes_name del año pasado" or "mes_name del año anterior"
+            # "mes_name del año pasado", "month_name of last year", "last year month_name"
             if re.search(
-                rf'\b{month_name}\b.*\baño\s+(?:pasado|anterior)\b'
-                rf'|\baño\s+(?:pasado|anterior)\b.*\b{month_name}\b', t
+                rf'\b{month_name}\b.*(?:\baño\s+(?:pasado|anterior)\b|\b(?:last|previous)\s+year\b)'
+                rf'|(?:\baño\s+(?:pasado|anterior)\b|\b(?:last|previous)\s+year\b).*\b{month_name}\b', t
             ):
                 y = today.year - 1
                 import calendar as _cal
                 last_day = _cal.monthrange(y, m_num)[1]
                 return f"{y}-{m_num:02d}-01", f"{y}-{m_num:02d}-{last_day}"
 
-            # With explicit year: "diciembre 2025" / "diciembre de 2025" / "diciembre del 2025"
+            # "mes_name de este año", "month_name of this year"
+            if re.search(
+                rf'\b{month_name}\b.*(?:\beste\s+año\b|\bthis\s+year\b)'
+                rf'|(?:\beste\s+año\b|\bthis\s+year\b).*\b{month_name}\b', t
+            ):
+                y = today.year
+                import calendar as _cal
+                last_day = _cal.monthrange(y, m_num)[1]
+                return f"{y}-{m_num:02d}-01", f"{y}-{m_num:02d}-{last_day}"
+
+            # With explicit year: "diciembre 2025" / "diciembre de 2025" / "december 2025"
             explicit = re.search(
-                rf'\b{month_name}\b\s*(?:de(?:l)?\s+)?(\d{{4}})', t
+                rf'\b{month_name}\b\s*(?:(?:de(?:l)?|of)\s+)?(\d{{4}})', t
             )
             if explicit:
                 y = int(explicit.group(1))
@@ -255,8 +265,27 @@ class AnalyticsAgent(BaseAgent):
                 context_data["customer_segmentation"] = rfm_res
 
             # 7. Dynamic Sales & Revenue Query
-            elif any(k in msg_lower for k in ["venta", "ventas", "ingreso", "ingresos", "revenue", "facturación", "facturacion"]):
-                dimension = "category" if "categoría" in msg_lower or "categoria" in msg_lower else "month"
+            elif any(k in msg_lower for k in ["venta", "ventas", "ingreso", "ingresos", "revenue", "facturación", "facturacion", "sales", "sale", "vendido", "vendidos", "facturado"]):
+                # Determine dimension: category, brand, supplier, payment_method, country, day, week, month, quarter
+                if any(c in msg_lower for c in ["categoría", "categoria", "category", "categories"]):
+                    dimension = "category"
+                elif any(b in msg_lower for b in ["marca", "marcas", "brand", "brands"]):
+                    dimension = "brand"
+                elif any(s in msg_lower for s in ["proveedor", "proveedores", "supplier", "suppliers"]):
+                    dimension = "supplier"
+                elif any(p in msg_lower for p in ["pago", "payment", "metodo de pago", "payment_method"]):
+                    dimension = "payment_method"
+                elif any(co in msg_lower for co in ["país", "pais", "country", "countries"]):
+                    dimension = "country"
+                elif "semana" in msg_lower or "week" in msg_lower:
+                    dimension = "week"
+                elif "trimestre" in msg_lower or "quarter" in msg_lower or "q1" in msg_lower or "q2" in msg_lower or "q3" in msg_lower or "q4" in msg_lower:
+                    dimension = "quarter"
+                elif "dia" in msg_lower or "día" in msg_lower or "day" in msg_lower:
+                    dimension = "day"
+                else:
+                    dimension = "month"
+
                 sales_res = await self.django_service.query_sales_analytics(
                     date_from=date_from,
                     date_to=date_to,
