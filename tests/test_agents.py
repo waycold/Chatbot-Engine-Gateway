@@ -1,5 +1,5 @@
 """Unit and integration tests for Agent Base, Concrete Agents, Analytics Multi-Tool Grounding and Agent Dispatcher."""
-from typing import AsyncGenerator
+from typing import Any, AsyncGenerator
 import pytest
 from app.agents.analytics import AnalyticsAgent
 from app.agents.base import BaseAgent
@@ -429,9 +429,33 @@ class TestAnalyticsAgentMultiToolResolution:
         assert "average_rating" in context or "reviews_summary" in context
 
     @pytest.mark.asyncio
-    async def test_analytics_agent_sql_sandbox_safe_intent(self) -> None:
-        """Verifies that SQL SELECT queries invoke execute_raw_sql_sandbox."""
+    async def test_analytics_agent_sql_sandbox_safe_intent(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Verifies that SQL SELECT queries invoke execute_raw_sql_sandbox FOR STAFF.
+
+        The token is now validated explicitly as staff instead of relying on the string
+        "valid-analyst-token" happening to satisfy a permissive development fallback.
+        That fallback was a security hole and has been closed, so without this stub the
+        test would still pass — but through the BLOCKED branch, silently asserting the
+        opposite of what its name claims. Pinning the staff identity keeps it testing the
+        privileged path it was written for.
+        """
         agent = AnalyticsAgent()
+
+        async def staff_validation(token: str) -> dict[str, Any]:
+            # The six normalized keys `validate_user_token` now always returns.
+            # Privilege is Django's native `is_staff` / `is_superuser` booleans:
+            # `auth_user` has no `role` column, and a role string authorizes nothing.
+            return {
+                "valid": True,
+                "user_id": 1,
+                "username": "admin_user",
+                "is_staff": True,
+                "is_superuser": False,
+                "error": None,
+            }
+
+        monkeypatch.setattr(agent.django_service, "validate_user_token", staff_validation)
+
         req = ChatRequest(
             agent_id="analytics",
             session_id="sess_sql_01",
@@ -442,6 +466,8 @@ class TestAnalyticsAgentMultiToolResolution:
         assert context is not None
         assert "execute_raw_sql_sandbox" in context
         assert "sandbox_mode" in context or "sql_results" in context
+        # The privileged branch really ran: a blocked result would carry blocked=true.
+        assert '"blocked": true' not in context.lower()
 
     @pytest.mark.asyncio
     async def test_analytics_agent_sql_sandbox_blocks_destructive_sql(self) -> None:
@@ -504,6 +530,9 @@ class TestEcommerceAgentAdvancedTools:
         )
         assert results["status"] == "success"
         assert len(results["items"]) <= 2
+        # `title` is the canonical field; `name` is the deprecated mirror the widget
+        # still reads. Both must be present until the widget migrates.
+        assert "title" in results["items"][0]
         assert "name" in results["items"][0]
 
 

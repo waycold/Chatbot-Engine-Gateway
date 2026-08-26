@@ -50,10 +50,37 @@ jobs:
             --retries 3 \
             --backoff 2.0
 
+      # Reuses this 10-minute cron instead of adding a second schedule: it bounds pgvector
+      # index staleness at ~10 minutes even when Django's /wake webhook is lost to a cold
+      # start. Never allowed to fail the job — an embeddings hiccup must not be reported
+      # as the gateway being down.
+      - name: Drain Pending Embeddings Outbox
+        id: embeddings
+        if: always()
+        continue-on-error: true
+        env:
+          DEFAULT_URL: ${{ secrets.GATEWAY_URL || vars.GATEWAY_URL || 'https://ai-agent-gateway-sued.onrender.com' }}
+          INPUT_URL: ${{ github.event.inputs.gateway_url }}
+          INTERNAL_API_SECRET: ${{ secrets.INTERNAL_API_SECRET }}
+        run: |
+          TARGET_URL="${INPUT_URL:-$DEFAULT_URL}"
+          echo "Triggering embeddings ingestion at: $TARGET_URL/api/v1/internal/embeddings/process-pending"
+          HTTP_CODE=$(curl -sS -o /tmp/embeddings_response.json -w '%{http_code}' \
+            -X POST "$TARGET_URL/api/v1/internal/embeddings/process-pending" \
+            -H "X-Internal-Secret: $INTERNAL_API_SECRET" \
+            -H "Content-Type: application/json" \
+            --max-time 60 || echo "000")
+          echo "http_code=$HTTP_CODE" >> $GITHUB_OUTPUT
+          echo "HTTP status: $HTTP_CODE"
+          cat /tmp/embeddings_response.json 2>/dev/null || true
+          echo ""
+          exit 0
+
       - name: Publish Health Summary to GitHub Step Summary
         if: always()
         run: |
           echo "### 🌐 Render Keep-Alive Ping Report" >> $GITHUB_STEP_SUMMARY
           echo "- **Timestamp**: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
           echo "- **Status**: ${{ steps.ping.outcome == 'success' && '✅ Online / Active' || '❌ Ping Failed' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Embeddings Ingestion**: HTTP ${{ steps.embeddings.outputs.http_code }} (non-blocking; keeps the pgvector index at most ~10 min stale)" >> $GITHUB_STEP_SUMMARY
           echo "- **Trigger**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY

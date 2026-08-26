@@ -1,8 +1,9 @@
 """API v1 Chat router definition with streaming SSE and standard JSON endpoints."""
+import asyncio
 import json
 import logging
 import time
-from typing import AsyncGenerator
+from typing import Any, AsyncGenerator
 from fastapi import APIRouter, HTTPException, Path, status
 from fastapi.responses import StreamingResponse
 from app.agents.dispatcher import get_agent_dispatcher
@@ -21,6 +22,12 @@ from app.services.memory import get_memory_service
 logger = logging.getLogger("ai_gateway.api.chat")
 
 router = APIRouter(prefix="/chat", tags=["Chat & Agents"])
+
+# Internal queue message kinds multiplexed onto the single SSE consumer.
+_KIND_TOKEN = "token"
+_KIND_PROGRESS = "progress"
+_KIND_END = "end"
+_KIND_ERROR = "error"
 
 
 @router.post(
@@ -77,10 +84,25 @@ async def chat_completion(request: ChatRequest) -> ChatResponse:
     },
 )
 async def chat_stream(request: ChatRequest) -> StreamingResponse:
-    """Server-Sent Events (SSE) streaming endpoint."""
+    """Server-Sent Events (SSE) streaming endpoint.
+
+    Chained tool calls take 4-7s warm and far longer when Render and Neon are both cold;
+    without progress events the stream looks frozen to the client. Tokens and tool
+    progress events are therefore multiplexed onto ONE queue with a single consumer, so
+    their relative ordering is preserved and there is no interleaving race.
+    """
     dispatcher = get_agent_dispatcher()
+
+    # Created here (before dispatch) because the agent needs the sink up front. It binds
+    # to the running loop, which is the same loop that will drain the StreamingResponse.
+    event_queue: asyncio.Queue[tuple[str, Any]] = asyncio.Queue()
+
+    async def event_sink(event_name: str, payload: dict[str, Any]) -> None:
+        """Enqueues a tool progress event emitted from inside the agent's tool loop."""
+        await event_queue.put((_KIND_PROGRESS, (event_name, payload)))
+
     try:
-        agent, token_generator = await dispatcher.dispatch_stream(request)
+        agent, token_generator = await dispatcher.dispatch_stream(request, event_sink=event_sink)
     except KeyError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -93,20 +115,50 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
             detail=f"Failed to initialize stream: {exc}",
         ) from exc
 
+    async def _pump_tokens() -> None:
+        """Drains the agent's token generator onto the shared queue."""
+        try:
+            async for token in token_generator:
+                await event_queue.put((_KIND_TOKEN, token))
+            await event_queue.put((_KIND_END, None))
+        except Exception as exc:
+            # Re-raised by the single consumer so the existing error handling applies.
+            await event_queue.put((_KIND_ERROR, exc))
+
     async def sse_event_stream() -> AsyncGenerator[str, None]:
         start_time = time.perf_counter()
         token_count = 0
+        pump_task = asyncio.create_task(_pump_tokens())
 
         try:
-            async for token in token_generator:
-                token_count += 1
-                chunk = StreamTokenChunk(
-                    token=token,
-                    agent_id=agent.agent_id,
-                    session_id=request.session_id,
-                    done=False,
-                )
-                yield f"data: {chunk.model_dump_json()}\n\n"
+            while True:
+                kind, payload = await event_queue.get()
+
+                if kind == _KIND_TOKEN:
+                    token_count += 1
+                    chunk = StreamTokenChunk(
+                        token=payload,
+                        agent_id=agent.agent_id,
+                        session_id=request.session_id,
+                        done=False,
+                    )
+                    yield f"data: {chunk.model_dump_json()}\n\n"
+                    continue
+
+                if kind == _KIND_PROGRESS:
+                    event_name, event_payload = payload
+                    body = {
+                        **event_payload,
+                        "agent_id": agent.agent_id,
+                        "session_id": request.session_id,
+                    }
+                    yield f"event: {event_name}\ndata: {json.dumps(body, ensure_ascii=False)}\n\n"
+                    continue
+
+                if kind == _KIND_ERROR:
+                    raise payload
+
+                break  # _KIND_END
 
             # Emit final completion event
             elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
@@ -134,6 +186,10 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
             logger.error("Error during active SSE stream: %s", exc)
             err_data = json.dumps({"error": str(exc), "status_code": 500, "done": True})
             yield f"event: error\ndata: {err_data}\n\n"
+        finally:
+            # A client disconnect leaves the pump mid-flight; never leak the task.
+            if not pump_task.done():
+                pump_task.cancel()
 
     headers = {
         "Content-Type": "text/event-stream",

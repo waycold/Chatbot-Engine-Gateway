@@ -1,13 +1,18 @@
 """Agent Dispatcher and Intent Orchestrator."""
+import inspect
 import logging
-from typing import AsyncGenerator, Optional
-from app.agents.analytics import AnalyticsAgent
-from app.agents.base import BaseAgent
+from typing import Any, AsyncGenerator, Optional
+from app.agents.analytics import AnalyticsAgent, _is_staff, set_auth_status
+from app.agents.base import BaseAgent, EventSink
 from app.agents.ecommerce import EcommerceAgent
 from app.agents.portfolio import PortfolioAgent
 from app.schemas.payload import AgentInfo, ChatRequest, ChatResponse
 
 logger = logging.getLogger("ai_gateway.dispatcher")
+
+# Agent that privileged requests are downgraded to when authorization fails. A shopper
+# who happens to type "reporte" should still get a helpful answer, not an error page.
+DOWNGRADE_AGENT_ID = "ecommerce"
 
 
 class AgentDispatcher:
@@ -86,17 +91,123 @@ class AgentDispatcher:
         logger.warning("Requested agent '%s' not found. Falling back to intent classification.", target_id)
         return self.get(self.classify_intent(message))
 
+    async def _authorize_agent(self, agent: BaseAgent, request: ChatRequest) -> BaseAgent:
+        """Enforces staff-gated routing, downgrading unauthorized analytics requests.
+
+        This is the outermost authorization layer: an unauthenticated caller never even
+        reaches the analytics agent, let alone its tools. It complements — and does not
+        replace — the per-agent schema gate and the `execute_tool` allowlist. Every
+        failure mode (missing token, invalid token, validation error) fails closed.
+
+        Privilege is read from Django's native `auth_user` booleans (`is_staff` /
+        `is_superuser`) exactly as `validate_user_token` normalized them; `auth_user` has
+        no `role` column, so no role strings are consumed here.
+
+        Args:
+            agent: The agent resolved by intent classification or explicit request.
+            request: The incoming chat request.
+
+        Returns:
+            The original agent when authorized, otherwise the downgrade agent.
+        """
+        if agent.agent_id != "analytics":
+            return agent
+
+        auth_status: dict[str, Any] = {
+            "authenticated": False,
+            "user_id": None,
+            "username": None,
+            "is_staff": False,
+            "is_superuser": False,
+        }
+
+        if request.user_token:
+            try:
+                # The analytics agent validates this same token again a moment later, in
+                # `get_context_augmentation`. That double validation is cheap now:
+                # `DjangoAPIService.validate_user_token` caches successful validations
+                # in-process for a few seconds, so both layers hit the cache, not Django.
+                validation = await agent.django_service.validate_user_token(request.user_token)
+                if isinstance(validation, dict) and validation.get("valid"):
+                    auth_status = {
+                        "authenticated": True,
+                        "user_id": validation.get("user_id"),
+                        "username": validation.get("username"),
+                        "is_staff": validation.get("is_staff"),
+                        "is_superuser": validation.get("is_superuser"),
+                    }
+            except Exception as exc:
+                logger.warning("Token validation failed during agent authorization: %s", exc)
+
+        if _is_staff(auth_status):
+            # Publish the verdict into the request-scoped, server-side auth channel.
+            set_auth_status(auth_status)
+            return agent
+
+        logger.warning(
+            "Downgrading analytics request for session '%s' to '%s': caller is not staff.",
+            request.session_id, DOWNGRADE_AGENT_ID,
+        )
+        try:
+            return self.get(DOWNGRADE_AGENT_ID)
+        except KeyError:
+            logger.error(
+                "Downgrade agent '%s' is not registered; keeping analytics with tools withheld.",
+                DOWNGRADE_AGENT_ID,
+            )
+            return agent
+
+    @staticmethod
+    def _accepts_event_sink(stream_callable: Any) -> bool:
+        """Determines whether an agent's `process_stream` accepts an `event_sink` kwarg.
+
+        Agents outside this refactor (and test doubles) still define `process_stream(self,
+        request)`; passing an unexpected keyword to those would raise TypeError.
+
+        Args:
+            stream_callable: The bound `process_stream` method to inspect.
+
+        Returns:
+            True when the callable declares an `event_sink` parameter or accepts **kwargs.
+        """
+        try:
+            parameters = inspect.signature(stream_callable).parameters
+        except (TypeError, ValueError):
+            return False
+
+        if "event_sink" in parameters:
+            return True
+        return any(param.kind is inspect.Parameter.VAR_KEYWORD for param in parameters.values())
+
     async def dispatch(self, request: ChatRequest) -> ChatResponse:
         """Dispatches request to resolved agent for non-streamed inference."""
         agent = self.resolve_agent(request.agent_id, request.message)
-        # Ensure request reflects the executing agent
+        agent = await self._authorize_agent(agent, request)
+        # Ensure request reflects the FINAL executing agent (post-authorization)
         request.agent_id = agent.agent_id
         return await agent.process(request)
 
-    async def dispatch_stream(self, request: ChatRequest) -> tuple[BaseAgent, AsyncGenerator[str, None]]:
-        """Resolves target agent and returns the token generator for streaming."""
+    async def dispatch_stream(
+        self,
+        request: ChatRequest,
+        event_sink: Optional[EventSink] = None,
+    ) -> tuple[BaseAgent, AsyncGenerator[str, None]]:
+        """Resolves target agent and returns the token generator for streaming.
+
+        Args:
+            request: The incoming chat request.
+            event_sink: Optional tool-progress callback forwarded to agents that support
+                it; agents that do not are called with the legacy single-argument form.
+
+        Returns:
+            A tuple of the final authorized agent and its token generator.
+        """
         agent = self.resolve_agent(request.agent_id, request.message)
+        agent = await self._authorize_agent(agent, request)
         request.agent_id = agent.agent_id
+
+        if event_sink is not None and self._accepts_event_sink(agent.process_stream):
+            return agent, agent.process_stream(request, event_sink=event_sink)
         return agent, agent.process_stream(request)
 
 

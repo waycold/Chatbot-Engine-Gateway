@@ -50,6 +50,102 @@ class Settings(BaseSettings):
     )
 
 
+    # --- Embeddings (RAG pipeline) ---
+    EMBEDDING_MODEL: str = Field(
+        default="gemini-embedding-2",
+        description="Primary Gemini embedding model (accepts up to 8192 input tokens)",
+    )
+    EMBEDDING_FALLBACK_MODEL: str = Field(
+        default="gemini-embedding-001",
+        description="Secondary embedding model used when the primary model fails (2048 token limit)",
+    )
+    EMBEDDING_DIMENSIONS: int = Field(
+        default=768,
+        description="Output dimensionality of the stored pgvector embeddings",
+    )
+    EMBEDDING_INPUT_MAX_CHARS: int = Field(
+        default=6000,
+        description=(
+            "Defensive character truncation applied to THE TEXT BEING EMBEDDED before calling "
+            "the primary embedding model: the product text on ingestion (RETRIEVAL_DOCUMENT) "
+            "and the user's query on search (RETRIEVAL_QUERY). This is NOT a cap on chat "
+            "prompts -- prompt/grounding text has its own budget, PROMPT_CONTEXT_MAX_CHARS."
+        ),
+    )
+    EMBEDDING_FALLBACK_MAX_CHARS: int = Field(
+        default=4500,
+        description=(
+            "Harder truncation for the fallback model, which only accepts 2048 tokens. "
+            "The design doc suggested 2048*3=6144 chars, but that exceeds EMBEDDING_INPUT_MAX_CHARS "
+            "(6000), so the 'truncate harder' rule would never actually fire. It is also an "
+            "optimistic ratio: 3 chars/token holds for plain ASCII English, while accented "
+            "Spanish product copy tokenizes closer to 2.2-2.6 chars/token. 4500 (~2.2 chars/token) "
+            "keeps us safely under the 2048-token ceiling. Raise only with real tokenizer data. "
+            "Recalibrate this number with `scripts/calibrate_token_ratio.py` instead of guessing."
+        ),
+    )
+    PROMPT_CONTEXT_MAX_CHARS: int = Field(
+        default=24000,
+        description=(
+            "Cap for grounding/context text injected into a chat prompt (retrieved catalog "
+            "snippets, business context, tool output). A different budget with a different "
+            "purpose than EMBEDDING_INPUT_MAX_CHARS -- chat models accept far larger inputs "
+            "than the embedding models -- and deliberately NOT shared with it."
+        ),
+    )
+    EMBEDDING_BATCH_LIMIT: int = Field(
+        default=20,
+        description="Maximum number of pending embedding tasks pulled per ingestion run",
+    )
+
+    # --- Function Calling / Tool Loop ---
+    ENABLE_TOOL_CALLING: bool = Field(
+        default=True,
+        description="Enables the multi-turn Gemini function-calling loop for agents",
+    )
+    MAX_TOOL_ITERATIONS: int = Field(
+        default=4,
+        description="Maximum number of tool-call round trips before forcing a final answer",
+    )
+
+    # --- Authorization ---
+    # NOTE: there is deliberately no configurable role list here. Django's `auth_user`
+    # model has no `role` column; privilege is expressed exclusively by the native
+    # `is_staff` / `is_superuser` booleans returned by the token validator. A settings
+    # key holding magic role strings would be a second, divergent source of truth.
+
+    # --- Auth token validation cache ---
+    TOKEN_VALIDATION_CACHE_TTL_SECONDS: float = Field(
+        default=20.0,
+        description=(
+            "Short-lived cache so one conversation turn does not re-validate the same token "
+            "against Django several times (the dispatcher and the analytics agent each "
+            "validate independently). Set to 0 to disable caching entirely."
+        ),
+    )
+    TOKEN_VALIDATION_CACHE_MAX_ENTRIES: int = Field(
+        default=512,
+        description="Maximum number of validated tokens held in the in-process validation cache",
+    )
+
+    # --- Provider Resilience (OpenRouter — chat/function-calling ONLY, never embeddings) ---
+    OPENROUTER_API_KEY: str = Field(
+        default="",
+        description="OpenRouter API key; an empty value disables the chat fallback entirely",
+    )
+    OPENROUTER_BASE_URL: str = Field(
+        default="https://openrouter.ai/api/v1",
+        description="Base URL of the OpenRouter OpenAI-compatible API",
+    )
+    OPENROUTER_MODEL: str = Field(
+        default="openai/gpt-4o-mini",
+        description="OpenRouter model identifier used for the chat/function-calling fallback",
+    )
+    OPENROUTER_TIMEOUT_SECONDS: float = Field(
+        default=20.0,
+        description="Timeout in seconds for the OpenRouter fallback HTTP request",
+    )
+
     # --- Knowledge Base & Business Context ---
     ECOMMERCE_CONTEXT_PATH: str = Field(
         default="data/ecommerce_business_context.md",
@@ -102,6 +198,11 @@ class Settings(BaseSettings):
             return [origin.strip().rstrip("/") for origin in value.split(",") if origin.strip()]
         elif isinstance(value, (list, tuple)):
             return [str(origin).rstrip("/") for origin in value]
+        # Defensive: never fall through to an implicit None for scalars/unknown types.
+        if value is None:
+            return []
+        return [str(value).strip().rstrip("/")]
+
     @field_validator("GEMINI_API_KEY", mode="before")
     @classmethod
     def clean_gemini_api_key(cls, value: Any) -> str:

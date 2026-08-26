@@ -1,15 +1,84 @@
 """Analytics Specialized Agent implementation with multi-tool analytical query capabilities."""
+import contextvars
 import json
 import logging
 import re
 from typing import Any, AsyncGenerator, Optional
-from app.agents.base import BaseAgent
+from app.agents.base import BaseAgent, EventSink
+from app.agents.tools import ANALYTICS_TOOL_DECLARATIONS, SQL_SANDBOX_TOOL_NAME
 from app.schemas.payload import ChatRequest, ChatResponse
 from app.services.django_api import DjangoAPIService
 from app.services.llm_client import LLMClientService
 from app.services.memory import RedisMemoryService
 
 logger = logging.getLogger("ai_gateway.agent.analytics")
+
+# Request-scoped cache of the resolved authorization status. `get_tool_declarations` is
+# synchronous while token validation is async, so the verdict has to be handed across.
+#
+# It is deliberately NOT stashed on `request.context`: that field is part of the public
+# ChatRequest payload, so a client could simply POST
+# `{"context": {"auth_status": {"authenticated": true, "is_staff": true}}}` and forge its
+# own staff privileges. A ContextVar is server-side only, is copied into any task
+# spawned from the request (so the SSE pump task inherits it), and cannot be reached from
+# the wire at all.
+_auth_status_var: contextvars.ContextVar[Optional[dict[str, Any]]] = contextvars.ContextVar(
+    "analytics_auth_status", default=None,
+)
+
+
+def set_auth_status(auth_status: dict[str, Any]) -> None:
+    """Publishes the resolved authorization status for the current request scope.
+
+    Args:
+        auth_status: The auth status dict assembled from `validate_user_token`.
+    """
+    _auth_status_var.set(auth_status)
+
+
+def get_auth_status() -> dict[str, Any]:
+    """Reads the authorization status resolved earlier in this request scope.
+
+    Returns:
+        The cached auth status, or an empty dict when none was resolved — which
+        `_is_staff` treats as not-staff, so the unknown case fails closed.
+    """
+    return _auth_status_var.get() or {}
+
+
+def _is_staff(auth_status: dict[str, Any]) -> bool:
+    """Determines whether a resolved auth status grants privileged analytics access.
+
+    Privilege comes exclusively from Django's two native `auth_user` booleans, which
+    `DjangoAPIService.validate_user_token` normalizes and this module carries through
+    unchanged. The expected shape is::
+
+        {"authenticated": bool, "user_id": Optional[int], "username": Optional[str],
+         "is_staff": bool, "is_superuser": bool}
+
+    The comparison is deliberately `is True`, not truthiness: a validator response that
+    leaked a string (`"false"`) or any other non-boolean must never grant privilege. An
+    unknown, malformed or absent auth status fails closed.
+
+    Note:
+        Known tech debt: reusing `is_staff` to authorize the read-only SQL console
+        conflates two different permissions — access to the Django admin is not the same
+        thing as permission to run SQL through a chat agent — an accepted simplification
+        at this project's scope, to revisit if this grows past a portfolio system.
+
+    Args:
+        auth_status: The auth status dict assembled from `validate_user_token`.
+
+    Returns:
+        True only when the request is authenticated AND Django reports the identity as
+        `is_staff` or `is_superuser`.
+    """
+    if not isinstance(auth_status, dict):
+        return False
+
+    return bool(auth_status.get("authenticated")) and (
+        auth_status.get("is_staff") is True or auth_status.get("is_superuser") is True
+    )
 
 
 class AnalyticsAgent(BaseAgent):
@@ -171,6 +240,32 @@ class AnalyticsAgent(BaseAgent):
         # No date range detected
         return None, None
 
+    def get_tool_declarations(self, request: ChatRequest) -> list[dict[str, Any]]:
+        """Returns the analytics tool schemas, exposing the SQL console to staff only.
+
+        The privileged `execute_raw_sql_sandbox` schema is only included when this turn's
+        token has ALREADY validated as staff — that is, when Django reported `is_staff` or
+        `is_superuser` for it. `get_context_augmentation` runs first in both execution
+        paths and publishes that verdict into the request-scoped ContextVar; when it is
+        absent (unknown caller, out-of-order invocation) this fails closed and the console
+        is withheld. Withholding the schema is layer one — `execute_tool`'s allowlist
+        independently refuses the same call as layer two.
+
+        Args:
+            request: The incoming chat request.
+
+        Returns:
+            Six read-only analytics declarations, plus the SQL console for staff.
+        """
+        if _is_staff(get_auth_status()):
+            return list(ANALYTICS_TOOL_DECLARATIONS)
+
+        return [
+            declaration
+            for declaration in ANALYTICS_TOOL_DECLARATIONS
+            if declaration["name"] != SQL_SANDBOX_TOOL_NAME
+        ]
+
     async def get_system_instruction(self, request: ChatRequest) -> str:
         """Returns specialized persona and constraints for the Analytics Agent."""
         return (
@@ -193,21 +288,42 @@ class AnalyticsAgent(BaseAgent):
     async def get_context_augmentation(self, request: ChatRequest) -> Optional[str]:
         """Validates token and queries analytical tools from Django backend based on query intent."""
         user_token = request.user_token
-        auth_status: dict[str, Any] = {"authenticated": False, "role": "anonymous"}
+        auth_status: dict[str, Any] = {
+            "authenticated": False,
+            "user_id": None,
+            "username": None,
+            "is_staff": False,
+            "is_superuser": False,
+        }
 
         if user_token:
             validation = await self.django_service.validate_user_token(user_token)
             if validation.get("valid"):
+                # Privilege comes from Django's native `auth_user` booleans and nothing
+                # else — `auth_user` has no `role` column — so the six normalized keys
+                # returned by the validator are carried through verbatim.
                 auth_status = {
                     "authenticated": True,
-                    "user_id": validation.get("user_id", "unknown"),
-                    "role": validation.get("role", "analyst"),
+                    "user_id": validation.get("user_id"),
+                    "username": validation.get("username"),
+                    "is_staff": validation.get("is_staff"),
+                    "is_superuser": validation.get("is_superuser"),
                 }
             else:
                 auth_status = {
                     "authenticated": False,
+                    "user_id": None,
+                    "username": None,
+                    "is_staff": False,
+                    "is_superuser": False,
                     "error": validation.get("error", "Invalid authentication token"),
                 }
+
+        is_staff = _is_staff(auth_status)
+
+        # Publish the resolved status so the synchronous `get_tool_declarations` can read
+        # it later in this same turn. Server-side only — never taken from the payload.
+        set_auth_status(auth_status)
 
         msg = request.message.strip()
         msg_lower = msg.lower()
@@ -219,12 +335,25 @@ class AnalyticsAgent(BaseAgent):
             context_data["detected_date_range"] = {"date_from": date_from, "date_to": date_to}
 
         try:
-            # 1. Check for Safe SQL Sandbox query
+            # 1. Check for Safe SQL Sandbox query (staff only)
             if any(k in msg_lower for k in ["select ", "sql:", "sql ", "drop ", "delete ", "insert ", "update ", "alter ", "truncate "]):
-                cleaned_sql = re.sub(r'^(?:ejecuta|consulta|query|sql|run|execute)\s*[:\s]*', '', msg, flags=re.IGNORECASE).strip()
-                sql_res = await self.django_service.execute_raw_sql_sandbox(sql_query=cleaned_sql, user_token=user_token)
-                context_data["tool_invoked"] = "execute_raw_sql_sandbox"
-                context_data["sql_results"] = sql_res
+                context_data["tool_invoked"] = SQL_SANDBOX_TOOL_NAME
+                if is_staff:
+                    cleaned_sql = re.sub(r'^(?:ejecuta|consulta|query|sql|run|execute)\s*[:\s]*', '', msg, flags=re.IGNORECASE).strip()
+                    sql_res = await self.django_service.execute_raw_sql_sandbox(sql_query=cleaned_sql, user_token=user_token)
+                    context_data["sql_results"] = sql_res
+                else:
+                    # The sandbox is NOT called at all for non-staff requests. `tool_invoked`
+                    # stays set so the model can explain what was refused and why.
+                    logger.warning(
+                        "Blocked SQL sandbox access for session '%s': caller is not staff.",
+                        request.session_id,
+                    )
+                    context_data["sql_results"] = {
+                        "status": "error",
+                        "blocked": True,
+                        "error": "Acceso denegado: la consola SQL requiere un token JWT de staff válido.",
+                    }
 
             # 2. Check for Inventory Health
             elif any(k in msg_lower for k in ["stock", "inventario", "agotado", "agotados", "crítico", "critico", "runout", "cobertura"]):
@@ -311,7 +440,17 @@ class AnalyticsAgent(BaseAgent):
         """Processes a chat request and returns a complete response."""
         return await self._execute_process(request)
 
-    async def process_stream(self, request: ChatRequest) -> AsyncGenerator[str, None]:
-        """Processes a chat request and yields SSE chunk tokens."""
-        async for token in self._execute_process_stream(request):
+    async def process_stream(
+        self,
+        request: ChatRequest,
+        *,
+        event_sink: Optional[EventSink] = None,
+    ) -> AsyncGenerator[str, None]:
+        """Processes a chat request and yields SSE chunk tokens.
+
+        Args:
+            request: The incoming chat request.
+            event_sink: Optional tool-progress callback forwarded to the tool loop.
+        """
+        async for token in self._execute_process_stream(request, event_sink=event_sink):
             yield token

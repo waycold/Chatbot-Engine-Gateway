@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.agents.dispatcher import get_agent_dispatcher
 from app.api.v1.chat import router as chat_router
+from app.api.v1.internal_embeddings import router as internal_embeddings_router
 from app.core.config import settings
 from app.schemas.payload import HealthResponse
 from app.services.django_api import get_django_api_service
@@ -71,6 +72,7 @@ def create_application() -> FastAPI:
 
     # Register API Routers
     application.include_router(chat_router, prefix=settings.API_V1_STR)
+    application.include_router(internal_embeddings_router, prefix=settings.API_V1_STR)
 
     # --- Keep-Alive & Health Check Endpoints ---
     @application.get(

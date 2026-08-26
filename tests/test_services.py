@@ -4,7 +4,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import HTTPException, status
 import httpx
-from app.agents.tools import ANALYTICS_TOOL_DECLARATIONS, execute_tool
+from app.agents.tools import (
+    ALL_TOOL_DECLARATIONS,
+    ANALYTICS_TOOL_DECLARATIONS,
+    CATALOG_RAG_TOOL_DECLARATIONS,
+    execute_tool,
+)
 from app.core.security import verify_internal_api_secret
 from app.services.django_api import DjangoAPIService
 from app.services.knowledge_base import KnowledgeBaseService
@@ -87,7 +92,10 @@ class TestDjangoAPIService:
         assert response.status_code == 200
         data = response.json()
         assert len(data["results"]) == 2
-        assert data["results"][0]["name"] == "Servicio Cloud AI"
+        # Django's field is `title`; the raw wire payload carries no `name` mirror.
+        # The `name` mirror is added by the gateway's `_shape_catalog_item`, which this
+        # test bypasses by reading the HTTP response directly.
+        assert data["results"][0]["title"] == "Servicio Cloud AI"
 
     @pytest.mark.asyncio
     async def test_django_api_service_search_catalog_scoring(self) -> None:
@@ -95,7 +103,7 @@ class TestDjangoAPIService:
         service = DjangoAPIService()
         results = await service.search_catalog(query="DevOps", limit=3)
         assert len(results) > 0
-        assert "DevOps" in results[0]["name"] or "DevOps" in results[0]["description"]
+        assert "DevOps" in results[0]["title"] or "DevOps" in results[0]["description"]
 
     @pytest.mark.asyncio
     async def test_django_api_service_timeout_handling(self) -> None:
@@ -201,8 +209,24 @@ class TestDjangoAPIExtendedEndpointsAndTools:
 
     @pytest.mark.asyncio
     async def test_execute_tool_dispatcher(self) -> None:
-        """Verifies the centralized execute_tool dispatcher for all 8 tools."""
-        assert len(ANALYTICS_TOOL_DECLARATIONS) == 8
+        """Verifies the centralized execute_tool dispatcher and the tool-set inventory.
+
+        The analytics set went from 8 declarations to 7: `semantic_catalog_search` was
+        moved out into `CATALOG_RAG_TOOL_DECLARATIONS`, where it gained pgvector
+        semantics and hard metadata filters. Catalog retrieval is an e-commerce concern,
+        and keeping it in the analytics set would have exposed it alongside the
+        privileged SQL console. The counts are asserted on all three sets so that a tool
+        silently drifting between sets — especially INTO the analytics set — fails here.
+        """
+        assert len(ANALYTICS_TOOL_DECLARATIONS) == 7
+        assert len(CATALOG_RAG_TOOL_DECLARATIONS) == 4
+        assert len(ALL_TOOL_DECLARATIONS) == 11
+
+        analytics_names = {declaration["name"] for declaration in ANALYTICS_TOOL_DECLARATIONS}
+        catalog_names = {declaration["name"] for declaration in CATALOG_RAG_TOOL_DECLARATIONS}
+        assert "semantic_catalog_search" not in analytics_names
+        assert "semantic_catalog_search" in catalog_names
+        assert not analytics_names & catalog_names, "the two tool sets must not overlap"
 
         # Test tool dispatcher for inventory
         inv_res = await execute_tool("get_inventory_health", {"status_filter": "critical", "limit": 2})

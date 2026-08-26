@@ -3,7 +3,14 @@ from datetime import datetime, timezone
 import json
 import logging
 from typing import Any, Optional
-import redis.asyncio as aioredis
+
+try:
+    import redis.asyncio as aioredis
+    REDIS_AVAILABLE = True
+except ImportError:  # pragma: no cover - exercised only in redis-less environments
+    aioredis = None  # type: ignore[assignment]
+    REDIS_AVAILABLE = False
+
 from app.core.config import settings
 
 logger = logging.getLogger("ai_gateway.memory")
@@ -54,6 +61,14 @@ class RedisMemoryService:
 
     async def init_pool(self) -> None:
         """Initializes the Redis connection pool and verifies connectivity."""
+        if not REDIS_AVAILABLE:
+            self._redis_client = None
+            logger.warning(
+                "The 'redis' package is not installed. Session memory will use the "
+                "in-memory fallback store (single-process, non-persistent)."
+            )
+            return
+
         try:
             self._redis_client = aioredis.from_url(
                 self.redis_url,

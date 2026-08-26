@@ -1,0 +1,204 @@
+{
+  "_comment": "Shared catalog fixture for the Chatbot-Engine-Gateway development mocks. Single source of truth for both the gateway team and the Django team: no product may be hand-invented in Python code any more. Every 'slug' is exactly slugify(title) (lowercase, accents stripped, non-alphanumerics collapsed to single hyphens) plus a numeric counter on collision, because the chat widget builds links as /product/<slug>/ and an invented slug renders a 404. Regenerate from Django with `python manage.py dumpdata catalog.Product --indent 2` (mapped to this shape) once the real /api/v1/internal/catalog/ endpoints exist.",
+  "version": 1,
+  "items": [
+    {
+      "id": 1,
+      "title": "Servicio Cloud AI",
+      "slug": "servicio-cloud-ai",
+      "price": 49.99,
+      "currency": "USD",
+      "stock": 10,
+      "brand": "Cloud Ops Studio",
+      "category": "Servicios",
+      "description": "Despliegue y configuración de microservicios de IA escalables en la nube (Render, AWS, GCP). El servicio cubre el aprovisionamiento completo del entorno: contenedores Docker optimizados para cargas de inferencia, variables de entorno y secretos gestionados fuera del repositorio, health checks listos para el balanceador y un pipeline de despliegue continuo que publica cada merge a la rama principal sin intervención manual. Incluimos la configuración de límites de CPU y memoria calculados a partir de tu tráfico real, políticas de autoescalado horizontal y una capa de caché en Redis para las respuestas más repetidas del modelo. También dejamos instrumentado el servicio con métricas de latencia por endpoint, tasa de error y consumo de tokens del proveedor de LLM, de modo que el coste por conversación sea observable desde el primer día. Al cierre entregamos un runbook en español con los procedimientos de rollback, rotación de claves y diagnóstico de las fallas más frecuentes en producción."
+    },
+    {
+      "id": 2,
+      "title": "Consultoría DevOps",
+      "slug": "consultoria-devops",
+      "price": 120.0,
+      "currency": "USD",
+      "stock": 5,
+      "brand": "Cloud Ops Studio",
+      "category": "Servicios",
+      "description": "Optimización de pipelines CI/CD, contenedorización con Docker y arquitecturas resilientes. Revisamos tus tiempos de build, la estrategia de caché de capas y la segmentación de entornos para acortar el ciclo desde el commit hasta producción."
+    },
+    {
+      "id": 3,
+      "title": "Curso Avanzado de FastAPI & Microservicios",
+      "slug": "curso-avanzado-de-fastapi-microservicios",
+      "price": 49.99,
+      "currency": "USD",
+      "stock": 50,
+      "brand": "Academy Pro",
+      "category": "Cursos",
+      "description": "Domina la construcción de microservicios de alto rendimiento con FastAPI, Pydantic v2 y Docker. El curso arranca con los fundamentos del modelo asíncrono de Python: bucle de eventos, corrutinas, concurrencia estructurada y los errores clásicos que convierten un endpoint async en un bloqueo silencioso del servidor. A partir de ahí construimos un servicio completo capa por capa: esquemas de validación con Pydantic v2, inyección de dependencias, autenticación por token, paginación, manejo centralizado de errores y respuestas en streaming con Server-Sent Events. La segunda mitad está dedicada a la operación real del servicio: pruebas con pytest y clientes asíncronos, contenedores multi-stage que pesan menos de cien megabytes, migraciones de base de datos sin downtime, observabilidad con logs estructurados y una guía de despliegue en Render y en Kubernetes. Cada módulo incluye el repositorio de referencia, ejercicios corregidos y una sesión grabada de revisión de código sobre proyectos de alumnos anteriores."
+    },
+    {
+      "id": 4,
+      "title": "Módulo de Integración LLM & Agentes Autónomos",
+      "slug": "modulo-de-integracion-llm-agentes-autonomos",
+      "price": 89.0,
+      "currency": "USD",
+      "stock": 25,
+      "brand": "GenAI Labs",
+      "category": "Software",
+      "description": "Librería plug-and-play para orquestar agentes multi-rol con Google GenAI y streaming SSE. El módulo resuelve el andamiaje que todo equipo termina reescribiendo: registro declarativo de herramientas con sus esquemas de argumentos, bucle de function calling con límite de iteraciones, enrutado entre agentes especializados y una capa de memoria conversacional respaldada por Redis con expiración configurable. Incorpora reintentos con backoff exponencial y jitter frente a errores transitorios del proveedor, un cliente de respaldo para chat cuando el modelo principal no responde, y una lista blanca de herramientas por agente para que un rol sin privilegios no pueda invocar operaciones sensibles. Todo el flujo se emite como eventos Server-Sent Events tipados, de manera que el frontend puede mostrar el razonamiento parcial, las llamadas a herramientas y el texto final sin esperar a que la respuesta se complete."
+    },
+    {
+      "id": 5,
+      "title": "Consultoría de Arquitectura de Software (1 Hora)",
+      "slug": "consultoria-de-arquitectura-de-software-1-hora",
+      "price": 120.0,
+      "currency": "USD",
+      "stock": 8,
+      "brand": "Cloud Ops Studio",
+      "category": "Servicios",
+      "description": "Sesión 1 a 1 de revisión de arquitectura, escalabilidad y optimización de microservicios. Analizamos tu diagrama actual, los puntos de acoplamiento entre servicios y las decisiones de persistencia, y salimos con un plan priorizado de tres a cinco cambios concretos."
+    },
+    {
+      "id": 6,
+      "title": "Template Backend Django + FastAPI Gateway",
+      "slug": "template-backend-django-fastapi-gateway",
+      "price": 29.99,
+      "currency": "USD",
+      "stock": 100,
+      "brand": "DevKit",
+      "category": "Templates",
+      "description": "Boilerplate de producción desacoplado con autenticación por secret y Redis pub/sub. Incluye un monolito Django con Django REST Framework para la lógica transaccional y un gateway FastAPI para las cargas de IA, comunicados por un secreto compartido en cabecera y por canales de Redis para los eventos asíncronos. Trae migraciones iniciales, modelos de catálogo y pedidos, panel de administración configurado en español, tareas programadas con Celery, configuración de CORS por entorno y un docker-compose que levanta base de datos, caché y ambos servicios con un solo comando. La plantilla viene con pruebas de humo, linters, hooks de pre-commit y un flujo de GitHub Actions que ejecuta la suite completa antes de permitir el merge."
+    },
+    {
+      "id": 7,
+      "title": "Curso de RAG con pgvector y PostgreSQL",
+      "slug": "curso-de-rag-con-pgvector-y-postgresql",
+      "price": 79.0,
+      "currency": "USD",
+      "stock": 40,
+      "brand": "Academy Pro",
+      "category": "Cursos",
+      "description": "Aprende a construir un sistema de recuperación aumentada por generación sobre PostgreSQL y la extensión pgvector, sin depender de una base de datos vectorial externa. El curso cubre el diseño del esquema y de los índices HNSW e IVFFlat, la elección de la dimensionalidad del embedding y su impacto real en el tamaño de la tabla, y la diferencia entre embeddings de documento y de consulta, que es la causa más común de una recuperación mediocre. Practicarás la ingesta incremental con una tabla de outbox, el troceado de textos largos, la deduplicación por hash de contenido y la reindexación en caliente. Terminamos con evaluación: cómo armar un conjunto de consultas de referencia, medir precisión y exhaustividad en los primeros k resultados, y decidir con datos si conviene reordenar los candidatos con un modelo de reranking."
+    },
+    {
+      "id": 8,
+      "title": "Módulo de Búsqueda Vectorial para E-Commerce",
+      "slug": "modulo-de-busqueda-vectorial-para-e-commerce",
+      "price": 149.0,
+      "currency": "USD",
+      "stock": 12,
+      "brand": "Vector Forge",
+      "category": "Software",
+      "description": "Motor de búsqueda semántica listo para integrar en una tienda existente. Expone endpoints de búsqueda vectorial, búsqueda híbrida y productos similares, con filtros combinables por precio, marca, categoría y disponibilidad de stock aplicados dentro de la misma consulta para que el ranking no se rompa al filtrar después. Incluye un trabajador de ingesta que mantiene los embeddings sincronizados con los cambios del catálogo, verificación de stock y precio contra la base transaccional antes de mostrar cualquier resultado al cliente, y degradación automática al buscador léxico anterior cuando el índice vectorial no está disponible."
+    },
+    {
+      "id": 9,
+      "title": "Template Frontend Next.js + Chat Widget SSE",
+      "slug": "template-frontend-next-js-chat-widget-sse",
+      "price": 39.99,
+      "currency": "USD",
+      "stock": 0,
+      "brand": "DevKit",
+      "category": "Templates",
+      "description": "Plantilla de frontend en Next.js con un widget de chat que consume eventos Server-Sent Events, modo claro y oscuro, y componentes accesibles listos para producción."
+    },
+    {
+      "id": 10,
+      "title": "Auditoría de Seguridad para APIs Internas",
+      "slug": "auditoria-de-seguridad-para-apis-internas",
+      "price": 320.0,
+      "currency": "USD",
+      "stock": 4,
+      "brand": "Arquitectura Andina",
+      "category": "Consultoría",
+      "description": "Revisión de seguridad enfocada en las APIs internas que comunican tus servicios entre sí, que suelen quedar fuera de las auditorías porque no están expuestas a internet. Verificamos la autenticación servicio a servicio, la rotación de secretos, la validación estricta de entradas, los límites de tamaño de payload y la superficie real de cada endpoint frente a lo documentado. Probamos escenarios de escalada de privilegios, reutilización de tokens caducados y respuestas que filtran datos de otros clientes. El entregable es un informe en español con cada hallazgo clasificado por severidad e impacto, la evidencia reproducible que lo demuestra y una propuesta de corrección concreta, además de una sesión de traspaso con el equipo de desarrollo."
+    },
+    {
+      "id": 11,
+      "title": "Servicio de Migración a Kubernetes",
+      "slug": "servicio-de-migracion-a-kubernetes",
+      "price": 480.0,
+      "currency": "USD",
+      "stock": 3,
+      "brand": "Cloud Ops Studio",
+      "category": "Servicios",
+      "description": "Migración guiada de tus servicios contenedorizados a un clúster de Kubernetes gestionado. Definimos los manifiestos de despliegue, servicios e ingress, la estrategia de configuración y secretos, las sondas de disponibilidad y vitalidad, y las políticas de autoescalado por métricas de CPU y de peticiones en cola. Acompañamos la primera puesta en producción con un despliegue azul-verde para que el cambio sea reversible en minutos, y dejamos configurado el monitoreo de recursos y de reinicios de contenedores para detectar fugas de memoria antes de que afecten al usuario final."
+    },
+    {
+      "id": 12,
+      "title": "Curso Intensivo de Observabilidad con OpenTelemetry",
+      "slug": "curso-intensivo-de-observabilidad-con-opentelemetry",
+      "price": 59.0,
+      "currency": "USD",
+      "stock": 0,
+      "brand": "Academy Pro",
+      "category": "Cursos",
+      "description": "Curso intensivo de dos semanas sobre instrumentación con OpenTelemetry: trazas distribuidas, métricas y logs correlacionados en servicios Python asíncronos, con exportación a un backend compatible y paneles de latencia por percentiles."
+    },
+    {
+      "id": 13,
+      "title": "Módulo de Facturación Electrónica para Django",
+      "slug": "modulo-de-facturacion-electronica-para-django",
+      "price": 199.0,
+      "currency": "USD",
+      "stock": 18,
+      "brand": "Pipeline Works",
+      "category": "Software",
+      "description": "Aplicación Django lista para integrar la facturación electrónica en tu tienda, con generación de comprobantes, numeración correlativa por punto de venta, cálculo de impuestos por jurisdicción y almacenamiento del acuse de la autoridad fiscal. Incluye reintentos idempotentes ante caídas del servicio externo, cola de comprobantes pendientes con reproceso manual desde el panel de administración, exportación contable en CSV y una interfaz de solo lectura para el equipo de soporte. La lógica fiscal está aislada tras una interfaz clara, de modo que adaptar el módulo a otro país implica escribir un adaptador y no tocar el resto del sistema."
+    },
+    {
+      "id": 14,
+      "title": "Plantilla de Pipeline CI/CD con GitHub Actions",
+      "slug": "plantilla-de-pipeline-ci-cd-con-github-actions",
+      "price": 19.99,
+      "currency": "USD",
+      "stock": 250,
+      "brand": "DevKit",
+      "category": "Templates",
+      "description": "Flujo de GitHub Actions reutilizable con etapas de linting, pruebas, construcción de imagen y despliegue, con caché de dependencias y publicación condicionada al resultado de la suite."
+    },
+    {
+      "id": 15,
+      "title": "Consultoría de Costos Cloud y FinOps",
+      "slug": "consultoria-de-costos-cloud-y-finops",
+      "price": 260.0,
+      "currency": "USD",
+      "stock": 6,
+      "brand": "Arquitectura Andina",
+      "category": "Consultoría",
+      "description": "Diagnóstico y reducción del gasto en la nube sin degradar el servicio. Partimos de la factura real y la atribuimos por servicio, entorno y equipo, para separar el coste que produce valor del que solo produce ruido. Revisamos el dimensionamiento de instancias frente a su uso observado, las políticas de retención de logs y copias de seguridad, el tráfico de salida entre zonas y el coste por conversación de los modelos de lenguaje, que suele ser la partida que más rápido crece y la peor medida. Entregamos un modelo de costes en planilla, una lista de acciones ordenadas por ahorro estimado y esfuerzo de implementación, y un panel de seguimiento para que el ahorro se sostenga en el tiempo en lugar de revertirse en dos trimestres."
+    },
+    {
+      "id": 16,
+      "title": "Servicio de Fine-Tuning de Modelos de Lenguaje",
+      "slug": "servicio-de-fine-tuning-de-modelos-de-lenguaje",
+      "price": 950.0,
+      "currency": "USD",
+      "stock": 2,
+      "brand": "GenAI Labs",
+      "category": "Servicios",
+      "description": "Servicio de ajuste fino de modelos de lenguaje sobre tu propio corpus. Comenzamos por la curación del conjunto de datos, que es donde se decide el resultado: deduplicación, normalización, anonimización de datos personales y partición honesta entre entrenamiento y evaluación. Definimos una línea base con el modelo sin ajustar y un conjunto de métricas acordado contigo, para que la mejora sea demostrable y no una impresión subjetiva. Ejecutamos el entrenamiento con seguimiento de experimentos, comparamos variantes de hiperparámetros y entregamos el modelo resultante junto con su tarjeta de modelo, los límites conocidos, los casos donde conviene seguir usando el modelo general y una estimación del coste de inferencia por millón de tokens en tu volumen actual."
+    },
+    {
+      "id": 17,
+      "title": "Curso de Diseño de Prompts para Agentes de Soporte",
+      "slug": "curso-de-diseno-de-prompts-para-agentes-de-soporte",
+      "price": 34.5,
+      "currency": "USD",
+      "stock": 65,
+      "brand": "Academy Pro",
+      "category": "Cursos",
+      "description": "Curso práctico de diseño de instrucciones para agentes de atención al cliente: estructura del mensaje de sistema, delimitación del alcance, manejo de casos fuera de dominio, tono de marca en español y evaluación sistemática de las respuestas con un conjunto de casos de prueba."
+    },
+    {
+      "id": 18,
+      "title": "Módulo de Analítica de Embudo y Retención",
+      "slug": "modulo-de-analitica-de-embudo-y-retencion",
+      "price": 129.0,
+      "currency": "USD",
+      "stock": 22,
+      "brand": "Pipeline Works",
+      "category": "Software",
+      "description": "Módulo de analítica que reconstruye el embudo de conversión y las cohortes de retención directamente sobre tu base transaccional, sin depender de trazadores del navegador. Calcula vistas de producto, adiciones al carrito, inicios de pago y pedidos completados, con tasas de abandono por etapa y por segmento de cliente. Añade segmentación RFM, valor de vida estimado, detección de clientes en riesgo por inactividad y el retorno real de cada cupón emitido, descontando el ingreso que se habría producido igual sin descuento. Todos los cálculos se exponen como endpoints internos autenticados y como vistas materializadas refrescadas por una tarea programada, de modo que el panel responda en milisegundos incluso con millones de pedidos."
+    }
+  ]
+}

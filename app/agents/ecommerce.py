@@ -2,8 +2,9 @@
 import json
 import logging
 import re
-from typing import AsyncGenerator, Optional
-from app.agents.base import BaseAgent
+from typing import Any, AsyncGenerator, Optional
+from app.agents.base import BaseAgent, EventSink
+from app.agents.tools import CATALOG_RAG_TOOL_DECLARATIONS
 from app.schemas.payload import ChatRequest, ChatResponse
 from app.services.knowledge_base import KnowledgeBaseService, get_knowledge_base_service
 
@@ -101,6 +102,30 @@ class EcommerceAgent(BaseAgent):
 
         return candidates
 
+    def get_tool_declarations(self, request: ChatRequest) -> list[dict[str, Any]]:
+        """Returns the catalog RAG tool schemas — and nothing else.
+
+        The analytics tools and, above all, the raw SQL console (`execute_raw_sql_sandbox`)
+        are deliberately excluded and MUST stay excluded. This agent is the public,
+        unauthenticated chat surface, and the RAG pipeline will soon ingest user-generated
+        review text: a review body is an injection vector that reaches the model without
+        the attacker ever joining the conversation. If the SQL console were reachable from
+        here, a single poisoned review could exfiltrate the whole database. Making the
+        schema structurally unreachable — rather than merely discouraged by a prompt — is
+        the only defense that survives that threat model.
+
+        Args:
+            request: The incoming chat request.
+
+        Returns:
+            A fresh copy of the four catalog retrieval tool declarations.
+        """
+        # Return a copy, never the module-level list itself. Handing out the shared object
+        # from a security-critical function means any caller that appends to the returned
+        # list silently mutates the global catalog tool set for every agent in the process --
+        # an in-process privilege escalation path that would put the SQL console right back.
+        return list(CATALOG_RAG_TOOL_DECLARATIONS)
+
     async def get_system_instruction(self, request: ChatRequest) -> str:
         """Returns specialized persona and constraints for the E-Commerce & Business Agent."""
         return (
@@ -113,12 +138,34 @@ class EcommerceAgent(BaseAgent):
             "- Presenta opciones y productos de forma estructurada (viñetas, precios claros, enlaces o condiciones relevantes).\n"
             "- Para preguntas institucionales o de políticas (envíos, devoluciones, formas de pago), responde con base estricta en el documento de políticas provisto.\n"
             "- Para preguntas sobre productos específicos o reseñas, utiliza los datos en tiempo real del catálogo provisto.\n"
-            "- Responde siempre en el mismo idioma del usuario (español por defecto)."
+            "- Responde siempre en el mismo idioma del usuario (español por defecto).\n\n"
+            "REGLAS OBLIGATORIAS SOBRE HERRAMIENTAS (no son sugerencias):\n"
+            "1. ANTIALUCINACIÓN DE STOCK Y PRECIO: DEBES llamar a `check_stock_and_price` ANTES de "
+            "afirmar CUALQUIER disponibilidad o precio al usuario, incluso si `semantic_catalog_search` "
+            "ya devolvió esos datos. La búsqueda semántica optimiza recall y NO es fuente de verdad de "
+            "disponibilidad ni de precio: esos valores pueden haber cambiado entre la indexación y este "
+            "instante. Nunca inventes ni supongas stock, precio ni moneda; si no verificaste, no lo afirmes.\n"
+            "2. DIVULGACIÓN OBLIGATORIA DE DEGRADACIÓN: si CUALQUIER resultado de herramienta trae "
+            "`status: \"degraded\"`, tu respuesta DEBE ABRIR diciendo en lenguaje llano que hubo un "
+            "problema técnico al buscar en el catálogo y que los resultados pueden estar incompletos, "
+            "ANTES de listar ningún producto. No basta con registrarlo internamente: el usuario debe "
+            "leerlo primero, porque de lo contrario tomará una decisión de compra creyendo que vio "
+            "todo el catálogo cuando no fue así.\n"
+            "3. FACETAS ANTES DE FILTRAR: llama a `list_catalog_facets` ANTES de filtrar "
+            "`semantic_catalog_search` por `category` o `brand`, y usa EXACTAMENTE los valores que "
+            "devuelva. Nunca inventes una categoría o marca que no exista en la base de datos."
         )
 
     async def get_context_augmentation(self, request: ChatRequest) -> Optional[str]:
-        """Loads Markdown business context and queries live Django database catalog."""
+        """Loads Markdown business context and queries live Django database catalog.
+
+        Behaviour of the eager grounding blocks is unchanged. A machine-readable
+        `[Catalog Retrieval Health]` block is appended when — and only when — a retrieval
+        degradation was detected, so the model reliably sees it instead of having to infer
+        it from a missing field.
+        """
         context_blocks: list[str] = []
+        degradation_reasons: list[str] = []
 
         # 1. Load Business Context & Policies from Markdown knowledge base
         try:
@@ -161,9 +208,31 @@ class EcommerceAgent(BaseAgent):
             if any(k in msg_lower for k in ["reseña", "reseñas", "review", "reviews", "calificación", "calificacion", "opinión", "opiniones", "estrellas"]):
                 reviews_data = await self.django_service.get_customer_reviews_summary(user_token=request.user_token)
                 context_blocks.append(f"[Customer Reviews & Ratings Summary]:\n{json.dumps(reviews_data, ensure_ascii=False, indent=2)}")
+                if isinstance(reviews_data, dict) and reviews_data.get("status") == "degraded":
+                    degradation_reasons.append(
+                        str(reviews_data.get("degraded_reason") or "El resumen de reseñas llegó en modo degradado.")
+                    )
 
         except Exception as exc:
             logger.warning("Error fetching e-commerce catalog context: %s", exc)
+            degradation_reasons.append(
+                f"La consulta al catálogo falló y el listado puede estar incompleto: {exc}"
+            )
+
+        # Machine-readable degradation flag: the system prompt requires the reply to OPEN
+        # with a plain-language warning whenever this block reports degraded=true.
+        if degradation_reasons:
+            health_payload = {
+                "degraded": True,
+                "reasons": degradation_reasons,
+                "instruction": (
+                    "Los resultados de catálogo pueden estar incompletos. Debes advertirlo al usuario "
+                    "en lenguaje llano al COMIENZO de tu respuesta, antes de listar productos."
+                ),
+            }
+            context_blocks.append(
+                f"[Catalog Retrieval Health]:\n{json.dumps(health_payload, ensure_ascii=False, indent=2)}"
+            )
 
         if not context_blocks:
             return None
@@ -174,7 +243,17 @@ class EcommerceAgent(BaseAgent):
         """Processes a chat request and returns a complete response."""
         return await self._execute_process(request)
 
-    async def process_stream(self, request: ChatRequest) -> AsyncGenerator[str, None]:
-        """Processes a chat request and yields SSE chunk tokens."""
-        async for token in self._execute_process_stream(request):
+    async def process_stream(
+        self,
+        request: ChatRequest,
+        *,
+        event_sink: Optional[EventSink] = None,
+    ) -> AsyncGenerator[str, None]:
+        """Processes a chat request and yields SSE chunk tokens.
+
+        Args:
+            request: The incoming chat request.
+            event_sink: Optional tool-progress callback forwarded to the tool loop.
+        """
+        async for token in self._execute_process_stream(request, event_sink=event_sink):
             yield token
