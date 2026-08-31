@@ -458,3 +458,160 @@ class TestKnowledgeBaseService:
         s1 = get_knowledge_base_service()
         s2 = get_knowledge_base_service()
         assert s1 is s2
+
+
+# ==============================================================================
+# Mock Fallback Toggle & Anti-Fabrication Tests
+# ==============================================================================
+
+class TestMockFallbackToggle:
+    """Verifies that ENABLE_MOCK_FALLBACK controls structured error responses vs synthetic fixtures."""
+
+    @pytest.mark.asyncio
+    async def test_django_api_methods_return_structured_errors_when_mock_fallback_disabled(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Verifies that all DjangoAPIService internal methods return structured errors when ENABLE_MOCK_FALLBACK=False."""
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "ENABLE_MOCK_FALLBACK", False)
+        service = DjangoAPIService(base_url="http://127.0.0.1:9")  # Unreachable port
+
+        # 1. search_catalog
+        res_search = await service.search_catalog(query="fastapi")
+        assert res_search == []
+
+        # 2. get_catalog_item
+        res_item = await service.get_catalog_item(item_id=1)
+        assert res_item["status"] == "error"
+        assert "unavailable" in res_item["error"]
+
+        # 3. query_sales_analytics
+        res_sales = await service.query_sales_analytics()
+        assert res_sales["status"] == "error"
+        assert res_sales["breakdown"] == []
+
+        # 4. get_inventory_health
+        res_inv = await service.get_inventory_health()
+        assert res_inv["status"] == "error"
+        assert res_inv["items"] == []
+
+        # 5. get_product_profitability
+        res_prof = await service.get_product_profitability()
+        assert res_prof["status"] == "error"
+        assert res_prof["ranking"] == []
+
+        # 6. get_funnel_and_cart_metrics
+        res_funnel = await service.get_funnel_and_cart_metrics()
+        assert res_funnel["status"] == "error"
+        assert res_funnel["top_abandoned_products"] == []
+
+        # 7. get_customer_reviews_summary
+        res_rev = await service.get_customer_reviews_summary()
+        assert res_rev["status"] == "error"
+        assert res_rev["total_reviews"] == 0
+
+        # 8. get_customer_segmentation
+        res_seg = await service.get_customer_segmentation()
+        assert res_seg["status"] == "error"
+        assert res_seg["total_customers"] == 0
+
+        # 9. semantic_catalog_search
+        res_sem = await service.semantic_catalog_search(query="cloud")
+        assert res_sem["status"] == "error"
+        assert res_sem["items"] == []
+
+        # 10. execute_raw_sql_sandbox
+        res_sql = await service.execute_raw_sql_sandbox(sql_query="SELECT * FROM items")
+        assert res_sql["status"] == "error"
+        assert res_sql["data"] == []
+
+        # 11. vector_search
+        res_vec = await service.vector_search(query_vector=[0.1] * 768, query_text="fastapi")
+        assert res_vec["status"] == "error"
+        assert res_vec["items"] == []
+
+        # 12. find_similar_products
+        res_sim = await service.find_similar_products(item_id=1)
+        assert res_sim["status"] == "error"
+        assert res_sim["items"] == []
+
+        # 13. get_pending_embeddings
+        res_pend = await service.get_pending_embeddings()
+        assert res_pend["status"] == "error"
+        assert res_pend["tasks"] == []
+
+        # 14. upsert_embedding
+        res_upsert = await service.upsert_embedding(
+            item_id=1, task_id="t1", vector=[0.1] * 768, content_hash="hash1", model_name="text-embedding-004"
+        )
+        assert res_upsert["status"] == "error"
+
+        # 15. mark_embedding_error
+        res_mark = await service.mark_embedding_error(task_id="t1", error="test error")
+        assert res_mark["status"] == "error"
+
+        # 16. verify_items
+        res_ver = await service.verify_items(item_ids=[1, 2])
+        assert res_ver["status"] == "error"
+        assert res_ver["items"] == []
+
+        # 17. get_catalog_facets
+        res_fac = await service.get_catalog_facets()
+        assert res_fac["status"] == "error"
+
+        # 18. legacy_lexical_search
+        res_lex = await service.legacy_lexical_search(query="fastapi")
+        assert res_lex["status"] == "error"
+        assert res_lex["items"] == []
+
+        # 19. query_analytics
+        res_an = await service.query_analytics()
+        assert res_an["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_analytics_agent_anti_fabrication_prompt_and_error_context(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Verifies AnalyticsAgent includes Rule 7 in system prompt and formats error context."""
+        from app.agents.analytics import AnalyticsAgent
+        from app.core.config import settings
+        from app.schemas.payload import ChatRequest
+
+        monkeypatch.setattr(settings, "ENABLE_MOCK_FALLBACK", False)
+        agent = AnalyticsAgent(django_service=DjangoAPIService(base_url="http://127.0.0.1:9"))
+
+        # Check system prompt
+        req = ChatRequest(agent_id="analytics", session_id="s1", message="Ventas de este mes")
+        prompt = await agent.get_system_instruction(req)
+        assert "7. DATA AVAILABILITY & ANTI-FABRICATION" in prompt
+        assert "DO NOT fabricate numbers" in prompt
+
+        # Check context augmentation contains error state
+        context = await agent.get_context_augmentation(req)
+        assert context is not None
+        assert "error" in context
+
+    @pytest.mark.asyncio
+    async def test_ecommerce_agent_anti_fabrication_prompt_and_fallback_guard(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Verifies EcommerceAgent includes Rule 4 in prompt and guards Stage 3 fallback catalog."""
+        from app.agents.ecommerce import EcommerceAgent
+        from app.core.config import settings
+        from app.schemas.payload import ChatRequest
+
+        monkeypatch.setattr(settings, "ENABLE_MOCK_FALLBACK", False)
+        agent = EcommerceAgent()
+        agent.django_service = DjangoAPIService(base_url="http://127.0.0.1:9")
+
+        # Check system prompt
+        req = ChatRequest(agent_id="ecommerce", session_id="s2", message="Quisiera el producto SuperZapatos")
+        prompt = await agent.get_system_instruction(req)
+        assert "4. CATALOG EMPTY & ANTI-FABRICATION" in prompt
+        assert "Never fabricate products" in prompt
+
+        # Check context augmentation does not inject synthetic products
+        context = await agent.get_context_augmentation(req)
+        assert context is not None
+        assert "No products currently available matching the inquiry." in context

@@ -130,8 +130,8 @@ Two grounding mechanisms run side by side, deliberately:
 | # | Tool Name | HTTP Endpoint | Description & Capabilities |
 |---|---|---|---|
 | **1** | `semantic_catalog_search` | `POST /api/v1/internal/catalog/vector-search/` | pgvector similarity search combined with hard metadata filters (price range, category, brand, stock). Degrades to the legacy lexical engine and tags the payload `status: "degraded"` rather than failing. |
-| **2** | `check_stock_and_price` | `POST /api/v1/internal/catalog/verify-items/` | Exact live stock and price read at query time. The agent is required to call it before affirming any availability or price, because semantic search optimizes recall and is never a source of truth for availability. |
-| **3** | `find_similar_products` | `POST /api/v1/internal/catalog/similar/` | Vector neighbours of a given product, for "algo parecido a X" and cross-sell. |
+| **2** | `check_stock_and_price` | `POST /api/v1/internal/catalog/items/verify/` | Exact live stock and price read at query time. The agent is required to call it before affirming any availability or price, because semantic search optimizes recall and is never a source of truth for availability. |
+| **3** | `find_similar_products` | `POST /api/v1/internal/catalog/embeddings/similar/` | Vector neighbours of a given product, for "algo parecido a X" and cross-sell. |
 | **4** | `list_catalog_facets` | `GET /api/v1/internal/catalog/facets/` | Valid category and brand values, so the model never invents a filter value that does not exist. |
 
 > ⚠️ **Status of the Django side**: the RAG endpoints above (vector search, facets, item verification, similarity, and the embeddings outbox) are **not yet live in the Django monolith** — that is the other team's Fase 0. Until they ship, `app/services/django_api.py` serves realistic **in-code mock fallbacks** on HTTP failure, so the gateway is fully testable end to end. One module deliberately has **no** mock fallback: `app/services/embeddings.py` never fabricates a vector, because a fake embedding written into the index would corrupt search ranking permanently and undetectably.

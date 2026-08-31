@@ -543,6 +543,9 @@ class DjangoAPIService:
             except Exception as exc:
                 logger.debug("Catalog endpoint '%s' query error: %s", endpoint, exc)
 
+        if not settings.ENABLE_MOCK_FALLBACK:
+            return []
+
         products = self._catalog_items()
 
         if not query or not query.strip():
@@ -584,6 +587,37 @@ class DjangoAPIService:
 
         return products[:limit]
 
+    async def get_catalog_item(self, item_id: Union[int, str]) -> dict[str, Any]:
+        """Fetches a single catalog item by ID or slug.
+
+        Endpoint: GET /api/v1/internal/catalog/items/{item_id}/
+        """
+        last_error = "Service unreachable"
+        try:
+            client = await self.get_client()
+            async with client:
+                response = await client.get(f"/api/v1/internal/catalog/items/{item_id}/")
+                if response.status_code == 200:
+                    data = response.json()
+                    if isinstance(data, dict):
+                        return _shape_catalog_item(data)
+                last_error = f"HTTP {response.status_code}: {response.text}"
+        except Exception as exc:
+            last_error = str(exc)
+            logger.debug("Get catalog item '%s' query error: %s", item_id, exc)
+
+        if not settings.ENABLE_MOCK_FALLBACK:
+            return {"status": "error", "error": f"Catalog item service is unavailable: {last_error}", "item_id": item_id}
+
+        verification = await self.verify_items(
+            item_ids=[int(item_id)] if str(item_id).isdigit() else None,
+            slugs=[str(item_id)] if not str(item_id).isdigit() else None,
+        )
+        items = verification.get("items") or [] if isinstance(verification, dict) else []
+        if items:
+            return items[0]
+        return {"status": "error", "error": f"Product '{item_id}' not found.", "item_id": item_id}
+
     # ==============================================================================
     # 8 Specialized Internal Endpoints (Ticket BE-05)
     # ==============================================================================
@@ -610,14 +644,28 @@ class DjangoAPIService:
         if user_token:
             headers["Authorization"] = f"Bearer {user_token}"
 
+        last_error = "Service unreachable"
         try:
             client = await self.get_client()
             async with client:
                 response = await client.get("/api/v1/internal/analytics/query/", params=params, headers=headers)
                 if response.status_code == 200:
                     return response.json()
+                last_error = f"HTTP {response.status_code}: {response.text}"
         except Exception as exc:
+            last_error = str(exc)
             logger.warning("Failed to call /api/v1/internal/analytics/query/: %s", exc)
+
+        if not settings.ENABLE_MOCK_FALLBACK:
+            return {
+                "status": "error",
+                "error": f"Sales analytics service is unavailable: {last_error}",
+                "date_from": date_from,
+                "date_to": date_to,
+                "dimension": dimension,
+                "aggregates": {},
+                "breakdown": [],
+            }
 
         # Realistic mock fallback
         return {
@@ -656,14 +704,25 @@ class DjangoAPIService:
         if user_token:
             headers["Authorization"] = f"Bearer {user_token}"
 
+        last_error = "Service unreachable"
         try:
             client = await self.get_client()
             async with client:
                 response = await client.get("/api/v1/internal/inventory/health/", params=params, headers=headers)
                 if response.status_code == 200:
                     return response.json()
+                last_error = f"HTTP {response.status_code}: {response.text}"
         except Exception as exc:
+            last_error = str(exc)
             logger.warning("Failed to call /api/v1/internal/inventory/health/: %s", exc)
+
+        if not settings.ENABLE_MOCK_FALLBACK:
+            return {
+                "status": "error",
+                "error": f"Inventory health service is unavailable: {last_error}",
+                "status_filter": status_filter,
+                "items": [],
+            }
 
         # Fallback inventory report
         return {
@@ -704,14 +763,25 @@ class DjangoAPIService:
         if user_token:
             headers["Authorization"] = f"Bearer {user_token}"
 
+        last_error = "Service unreachable"
         try:
             client = await self.get_client()
             async with client:
                 response = await client.get("/api/v1/internal/analytics/margins/", params=params, headers=headers)
                 if response.status_code == 200:
                     return response.json()
+                last_error = f"HTTP {response.status_code}: {response.text}"
         except Exception as exc:
+            last_error = str(exc)
             logger.warning("Failed to call /api/v1/internal/analytics/margins/: %s", exc)
+
+        if not settings.ENABLE_MOCK_FALLBACK:
+            return {
+                "status": "error",
+                "error": f"Product profitability service is unavailable: {last_error}",
+                "group_by": group_by,
+                "ranking": [],
+            }
 
         return {
             "status": "success",
@@ -742,14 +812,26 @@ class DjangoAPIService:
         if user_token:
             headers["Authorization"] = f"Bearer {user_token}"
 
+        last_error = "Service unreachable"
         try:
             client = await self.get_client()
             async with client:
                 response = await client.get("/api/v1/internal/analytics/funnel/", params=params, headers=headers)
                 if response.status_code == 200:
                     return response.json()
+                last_error = f"HTTP {response.status_code}: {response.text}"
         except Exception as exc:
+            last_error = str(exc)
             logger.warning("Failed to call /api/v1/internal/analytics/funnel/: %s", exc)
+
+        if not settings.ENABLE_MOCK_FALLBACK:
+            return {
+                "status": "error",
+                "error": f"Funnel analytics service is unavailable: {last_error}",
+                "timeframe": timeframe,
+                "funnel_stages": {},
+                "top_abandoned_products": [],
+            }
 
         return {
             "status": "success",
@@ -794,14 +876,29 @@ class DjangoAPIService:
         if user_token:
             headers["Authorization"] = f"Bearer {user_token}"
 
+        last_error = "Service unreachable"
         try:
             client = await self.get_client()
             async with client:
                 response = await client.get("/api/v1/internal/catalog/reviews-summary/", params=params, headers=headers)
                 if response.status_code == 200:
                     return response.json()
+                last_error = f"HTTP {response.status_code}: {response.text}"
         except Exception as exc:
+            last_error = str(exc)
             logger.warning("Failed to call /api/v1/internal/catalog/reviews-summary/: %s", exc)
+
+        if not settings.ENABLE_MOCK_FALLBACK:
+            return {
+                "status": "error",
+                "error": f"Customer reviews service is unavailable: {last_error}",
+                "product_id": str(product_id) if product_id else "all",
+                "total_reviews": 0,
+                "rating_distribution": {},
+                "sentiment_summary": {},
+                "highlights": [],
+                "critical_alerts": [],
+            }
 
         return {
             "status": "success",
@@ -834,14 +931,27 @@ class DjangoAPIService:
         if user_token:
             headers["Authorization"] = f"Bearer {user_token}"
 
+        last_error = "Service unreachable"
         try:
             client = await self.get_client()
             async with client:
                 response = await client.get("/api/v1/internal/customers/insights/", params=params, headers=headers)
                 if response.status_code == 200:
                     return response.json()
+                last_error = f"HTTP {response.status_code}: {response.text}"
         except Exception as exc:
+            last_error = str(exc)
             logger.warning("Failed to call /api/v1/internal/customers/insights/: %s", exc)
+
+        if not settings.ENABLE_MOCK_FALLBACK:
+            return {
+                "status": "error",
+                "error": f"Customer segmentation service is unavailable: {last_error}",
+                "segment_filter": segment,
+                "total_customers": 0,
+                "segments": {},
+                "top_regions": [],
+            }
 
         return {
             "status": "success",
@@ -915,14 +1025,25 @@ class DjangoAPIService:
         if brand:
             payload["brand"] = brand
 
+        last_error = "Service unreachable"
         try:
             client = await self.get_client()
             async with client:
                 response = await client.post("/api/v1/internal/catalog/semantic-search/", json=payload)
                 if response.status_code == 200:
                     return _shape_response_items(response.json())
+                last_error = f"HTTP {response.status_code}: {response.text}"
         except Exception as exc:
+            last_error = str(exc)
             logger.warning("Failed to call /api/v1/internal/catalog/semantic-search/: %s", exc)
+
+        if not settings.ENABLE_MOCK_FALLBACK:
+            return {
+                "status": "error",
+                "error": f"Semantic catalog search service is unavailable: {last_error}",
+                "query": query,
+                "items": [],
+            }
 
         # Match semantics against catalog
         catalog = await self.search_catalog(query=query, category=effective_category, limit=50)
@@ -977,14 +1098,27 @@ class DjangoAPIService:
         if user_token:
             headers["Authorization"] = f"Bearer {user_token}"
 
+        last_error = "Service unreachable"
         try:
             client = await self.get_client()
             async with client:
                 response = await client.post("/api/v1/internal/query/raw-read/", json=payload, headers=headers)
                 if response.status_code == 200:
                     return response.json()
+                last_error = f"HTTP {response.status_code}: {response.text}"
         except Exception as exc:
+            last_error = str(exc)
             logger.warning("Failed to call /api/v1/internal/query/raw-read/: %s", exc)
+
+        if not settings.ENABLE_MOCK_FALLBACK:
+            return {
+                "status": "error",
+                "error": f"SQL sandbox service is unavailable: {last_error}",
+                "sql_query": sql_query,
+                "rows_returned": 0,
+                "columns": [],
+                "data": [],
+            }
 
         return {
             "status": "success",
@@ -1072,14 +1206,25 @@ class DjangoAPIService:
         if brand:
             payload["brand"] = brand
 
+        last_error = "Service unreachable"
         try:
             client = await self.get_client()
             async with client:
                 response = await client.post("/api/v1/internal/catalog/vector-search/", json=payload)
                 if response.status_code == 200:
                     return _shape_response_items(response.json())
+                last_error = f"HTTP {response.status_code}: {response.text}"
         except Exception as exc:
+            last_error = str(exc)
             logger.warning("Failed to call /api/v1/internal/catalog/vector-search/: %s", exc)
+
+        if not settings.ENABLE_MOCK_FALLBACK:
+            return {
+                "status": "error",
+                "error": f"Vector search service is unavailable: {last_error}",
+                "query": query_text,
+                "items": [],
+            }
 
         candidates = await self._mock_rag_items(
             query=query_text or None,
@@ -1136,14 +1281,25 @@ class DjangoAPIService:
             "exclude_out_of_stock": exclude_out_of_stock,
         }
 
+        last_error = "Service unreachable"
         try:
             client = await self.get_client()
             async with client:
                 response = await client.post("/api/v1/internal/catalog/embeddings/similar/", json=payload)
                 if response.status_code == 200:
                     return _shape_response_items(response.json())
+                last_error = f"HTTP {response.status_code}: {response.text}"
         except Exception as exc:
+            last_error = str(exc)
             logger.warning("Failed to call /api/v1/internal/catalog/embeddings/similar/: %s", exc)
+
+        if not settings.ENABLE_MOCK_FALLBACK:
+            return {
+                "status": "error",
+                "error": f"Vector similarity service is unavailable: {last_error}",
+                "reference_item_id": item_id,
+                "items": [],
+            }
 
         candidates = await self._mock_rag_items(in_stock_only=exclude_out_of_stock)
         # A product is never its own recommendation.
@@ -1180,14 +1336,24 @@ class DjangoAPIService:
         """
         params = {"limit": limit}
 
+        last_error = "Service unreachable"
         try:
             client = await self.get_client()
             async with client:
                 response = await client.get("/api/v1/internal/catalog/embeddings/pending/", params=params)
                 if response.status_code == 200:
                     return response.json()
+                last_error = f"HTTP {response.status_code}: {response.text}"
         except Exception as exc:
+            last_error = str(exc)
             logger.warning("Failed to call /api/v1/internal/catalog/embeddings/pending/: %s", exc)
+
+        if not settings.ENABLE_MOCK_FALLBACK:
+            return {
+                "status": "error",
+                "error": f"Pending embeddings service is unavailable: {last_error}",
+                "tasks": [],
+            }
 
         catalog = self._catalog_items()
         tasks: list[dict[str, Any]] = []
@@ -1237,7 +1403,7 @@ class DjangoAPIService:
         if not vector:
             return {
                 "status": "error",
-                "error": "El vector de embedding está vacío; no se envió al índice.",
+                "error": "The embedding vector is empty; not submitted to index.",
                 "task_id": task_id,
                 "item_id": item_id,
             }
@@ -1245,8 +1411,8 @@ class DjangoAPIService:
             return {
                 "status": "error",
                 "error": (
-                    f"Dimensión de vector inválida: se recibieron {len(vector)} valores "
-                    f"y se esperaban {expected_dimensions}."
+                    f"Invalid vector dimension: received {len(vector)} values, "
+                    f"expected {expected_dimensions}."
                 ),
                 "task_id": task_id,
                 "item_id": item_id,
@@ -1260,14 +1426,25 @@ class DjangoAPIService:
             "model_name": model_name,
         }
 
+        last_error = "Service unreachable"
         try:
             client = await self.get_client()
             async with client:
                 response = await client.post("/api/v1/internal/catalog/embeddings/upsert/", json=payload)
                 if response.status_code == 200:
                     return response.json()
+                last_error = f"HTTP {response.status_code}: {response.text}"
         except Exception as exc:
+            last_error = str(exc)
             logger.warning("Failed to call /api/v1/internal/catalog/embeddings/upsert/: %s", exc)
+
+        if not settings.ENABLE_MOCK_FALLBACK:
+            return {
+                "status": "error",
+                "error": f"Embedding upsert service is unavailable: {last_error}",
+                "task_id": task_id,
+                "item_id": item_id,
+            }
 
         return {
             "status": "success",
@@ -1294,14 +1471,24 @@ class DjangoAPIService:
         truncated_error = str(error or "")[:500]
         payload = {"task_id": task_id, "error": truncated_error}
 
+        last_error = "Service unreachable"
         try:
             client = await self.get_client()
             async with client:
                 response = await client.post("/api/v1/internal/catalog/embeddings/mark-error/", json=payload)
                 if response.status_code == 200:
                     return response.json()
+                last_error = f"HTTP {response.status_code}: {response.text}"
         except Exception as exc:
+            last_error = str(exc)
             logger.warning("Failed to call /api/v1/internal/catalog/embeddings/mark-error/: %s", exc)
+
+        if not settings.ENABLE_MOCK_FALLBACK:
+            return {
+                "status": "error",
+                "error": f"Embedding mark-error service is unavailable: {last_error}",
+                "task_id": task_id,
+            }
 
         return {
             "status": "success",
@@ -1334,7 +1521,7 @@ class DjangoAPIService:
             `not_found` identifiers, which keep the exact value the caller passed in.
         """
         if not item_ids and not slugs:
-            return {"status": "error", "error": "Debe indicar item_ids o slugs."}
+            return {"status": "error", "error": "Must provide item_ids or slugs."}
 
         payload: dict[str, Any] = {}
         if item_ids:
@@ -1342,14 +1529,25 @@ class DjangoAPIService:
         if slugs:
             payload["slugs"] = slugs
 
+        last_error = "Service unreachable"
         try:
             client = await self.get_client()
             async with client:
                 response = await client.post("/api/v1/internal/catalog/items/verify/", json=payload)
                 if response.status_code == 200:
                     return _shape_response_items(response.json())
+                last_error = f"HTTP {response.status_code}: {response.text}"
         except Exception as exc:
+            last_error = str(exc)
             logger.warning("Failed to call /api/v1/internal/catalog/items/verify/: %s", exc)
+
+        if not settings.ENABLE_MOCK_FALLBACK:
+            return {
+                "status": "error",
+                "error": f"Live stock verification service is unavailable: {last_error}",
+                "items": [],
+                "not_found": (item_ids or []) + (slugs or []),
+            }
 
         shaped = self._catalog_items()
         by_id = {item["id"]: item for item in shaped}
@@ -1412,19 +1610,29 @@ class DjangoAPIService:
         if facet not in valid_facets:
             return {
                 "status": "error",
-                "error": f"Faceta inválida: '{facet}'. Use 'category', 'brand' o 'both'.",
+                "error": f"Invalid facet: '{facet}'. Use 'category', 'brand' or 'both'.",
             }
 
         params = {"facet": facet}
 
+        last_error = "Service unreachable"
         try:
             client = await self.get_client()
             async with client:
                 response = await client.get("/api/v1/internal/catalog/facets/", params=params)
                 if response.status_code == 200:
                     return response.json()
+                last_error = f"HTTP {response.status_code}: {response.text}"
         except Exception as exc:
+            last_error = str(exc)
             logger.warning("Failed to call /api/v1/internal/catalog/facets/: %s", exc)
+
+        if not settings.ENABLE_MOCK_FALLBACK:
+            return {
+                "status": "error",
+                "error": f"Catalog facets service is unavailable: {last_error}",
+                "facet": facet,
+            }
 
         shaped = self._catalog_items()
 
@@ -1481,14 +1689,25 @@ class DjangoAPIService:
         if brand:
             payload["brand"] = brand
 
+        last_error = "Service unreachable"
         try:
             client = await self.get_client()
             async with client:
                 response = await client.post("/api/v1/internal/catalog/semantic-search/", json=payload)
                 if response.status_code == 200:
                     return _shape_response_items(response.json())
+                last_error = f"HTTP {response.status_code}: {response.text}"
         except Exception as exc:
+            last_error = str(exc)
             logger.warning("Failed to call /api/v1/internal/catalog/semantic-search/ (lexical): %s", exc)
+
+        if not settings.ENABLE_MOCK_FALLBACK:
+            return {
+                "status": "error",
+                "error": f"Lexical search service is unavailable: {last_error}",
+                "query": query,
+                "items": [],
+            }
 
         candidates = await self._mock_rag_items(
             query=query or None,
@@ -1538,16 +1757,28 @@ class DjangoAPIService:
 
         params = {"metric_type": metric_type}
 
+        last_error = "Service unreachable"
         try:
             client = await self.get_client()
             async with client:
                 response = await client.get("/api/v1/internal/analytics/metrics/", params=params, headers=headers)
                 if response.status_code == 200:
                     return response.json()
+                last_error = f"HTTP {response.status_code}: {response.text}"
         except Exception as exc:
+            last_error = str(exc)
             logger.warning("Failed to query analytics from Django: %s. Using mock metrics.", exc)
 
+        if not settings.ENABLE_MOCK_FALLBACK:
+            return {
+                "status": "error",
+                "error": f"Analytics service is unavailable: {last_error}",
+                "metric_type": metric_type,
+                "timeframe": timeframe,
+            }
+
         return {
+            "status": "success",
             "metric_type": metric_type,
             "timeframe": timeframe,
             "daily_active_users": 1520,

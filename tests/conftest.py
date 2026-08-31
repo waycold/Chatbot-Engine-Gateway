@@ -38,6 +38,7 @@ os.environ["INTERNAL_API_SECRET"] = "test-internal-secret-67890"
 os.environ["REDIS_URL"] = "redis://localhost:6379/15"
 os.environ["DJANGO_BACKEND_URL"] = "http://test-django:8000"
 os.environ["BACKEND_CORS_ORIGINS"] = '["http://localhost:3000","http://test-frontend:3000"]'
+os.environ["ENABLE_MOCK_FALLBACK"] = "true"
 
 # The values the entire suite is written against. Named constants so the tripwire
 # below, and the fixtures further down, cannot drift away from the block above.

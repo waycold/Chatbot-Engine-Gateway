@@ -175,6 +175,10 @@ class Settings(BaseSettings):
         ...,
         description="Shared secret key for authenticating internal service-to-service communication",
     )
+    ENABLE_MOCK_FALLBACK: bool = Field(
+        default=False,
+        description="When False, backend service errors return structured error responses instead of synthetic mock data",
+    )
 
     # --- CORS Configuration ---
     BACKEND_CORS_ORIGINS: list[str] = Field(

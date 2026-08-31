@@ -50,6 +50,24 @@ STREAM_CHUNK_WORDS = 8
 # and deliberately visible: a silent truncation looks exactly like missing data.
 CONTEXT_TRUNCATION_MARKER = "\n\n[...contexto truncado por límite de tamaño...]"
 
+# Appended to the system instruction only for the ungrounded fallback turn -- the plain
+# `generate_content` / `generate_content_stream` call made when `run_tool_loop` returns an
+# empty string (the loop's own provider call raised, or tool calling is disabled/
+# unavailable this turn). In that turn the model has no tool declarations at all, so
+# nothing stops it from answering stock/price/availability questions straight out of its
+# training data instead of admitting it cannot check. This block closes that gap the same
+# way the "Fase 5" degraded-search disclosure closes the analogous gap inside the loop
+# itself: an explicit, mandatory instruction placed right next to the point of failure.
+NO_TOOLS_HALLUCINATION_GUARDRAIL = (
+    "\n\n[Aviso de disponibilidad de herramientas]: en este turno NO tienes acceso a "
+    "ninguna herramienta de verificación en tiempo real (stock, precio, disponibilidad "
+    "o catálogo). NO debes afirmar ni inventar datos de stock, precio o disponibilidad a "
+    "partir de tu conocimiento propio. Si la pregunta del usuario depende de ese tipo de "
+    "datos, responde únicamente que no puedes verificarlo en este momento y que por favor "
+    "reintente en unos minutos. Puedes seguir respondiendo con normalidad cualquier otra "
+    "parte de la consulta que no dependa de datos en tiempo real."
+)
+
 
 def _build_function_response_parts(results: list[tuple[str, dict]]) -> Optional[list[Any]]:
     """Builds native SDK `function_response` parts for one tool-loop iteration.
@@ -439,6 +457,39 @@ class BaseAgent(ABC):
         """
         return bool(declarations) and bool(settings.ENABLE_TOOL_CALLING) and self.llm_service.is_available
 
+    def _guard_no_tools_system_instruction(
+        self, system_instruction: str, declarations: list[dict[str, Any]],
+    ) -> str:
+        """Appends the anti-hallucination guardrail to the ungrounded fallback turn.
+
+        `_execute_process` and `_execute_process_stream` both fall back to calling the
+        LLM with no tools at all whenever `run_tool_loop` returns an empty string --
+        either because the loop's own provider call raised (see the `except` block at
+        the end of `run_tool_loop`) or because tool calling is disabled/unavailable this
+        turn. That fallback call has zero grounding, so nothing stops the model from
+        answering a stock/price/availability question straight out of its training data
+        instead of admitting it cannot check right now. This method closes that gap by
+        appending `NO_TOOLS_HALLUCINATION_GUARDRAIL` to the system instruction for that
+        one call only.
+
+        Agents that never declare tools (e.g. `PortfolioAgent`) never ground facts via
+        tool calls in the first place, so their fallback is not a degraded path and must
+        not pay this cost or change behavior -- hence the no-op when `declarations` is
+        empty.
+
+        Args:
+            system_instruction: The agent's system prompt for this turn.
+            declarations: The tool schemas this agent exposes (as returned by
+                `get_tool_declarations`).
+
+        Returns:
+            `system_instruction` unchanged when `declarations` is empty, otherwise
+            `system_instruction` with the guardrail text appended.
+        """
+        if not declarations:
+            return system_instruction
+        return system_instruction + NO_TOOLS_HALLUCINATION_GUARDRAIL
+
     # Exposed on the class as well as at module level so the SDK-primary branch can be
     # exercised in isolation from either entry point. Same function, same signature.
     _build_function_response_parts = staticmethod(_build_function_response_parts)
@@ -531,7 +582,9 @@ class BaseAgent(ABC):
         if not response_text:
             response_text = await self.llm_service.generate_content(
                 contents=contents,
-                system_instruction=system_instruction,
+                system_instruction=self._guard_no_tools_system_instruction(
+                    system_instruction, declarations,
+                ),
                 model=settings.DEFAULT_MODEL,
             )
 
@@ -604,7 +657,9 @@ class BaseAgent(ABC):
 
         async for token in self.llm_service.generate_content_stream(
             contents=contents,
-            system_instruction=system_instruction,
+            system_instruction=self._guard_no_tools_system_instruction(
+                system_instruction, declarations,
+            ),
             model=settings.DEFAULT_MODEL,
         ):
             collected_tokens.append(token)

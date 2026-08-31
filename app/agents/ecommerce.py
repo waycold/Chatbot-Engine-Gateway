@@ -5,6 +5,7 @@ import re
 from typing import Any, AsyncGenerator, Optional
 from app.agents.base import BaseAgent, EventSink
 from app.agents.tools import CATALOG_RAG_TOOL_DECLARATIONS
+from app.core.config import settings
 from app.schemas.payload import ChatRequest, ChatResponse
 from app.services.knowledge_base import KnowledgeBaseService, get_knowledge_base_service
 
@@ -39,7 +40,7 @@ class EcommerceAgent(BaseAgent):
         super().__init__(
             agent_id=agent_id,
             name="E-Commerce & Business Agent",
-            description="Responde sobre catálogo de productos, precios, disponibilidad en stock, políticas de envío, devoluciones, reseñas y métodos de pago.",
+            description="Answers inquiries about product catalog, prices, stock availability, shipping policies, returns, reviews, and payment methods.",
             capabilities=[
                 "product_search",
                 "semantic_search",
@@ -129,31 +130,31 @@ class EcommerceAgent(BaseAgent):
     async def get_system_instruction(self, request: ChatRequest) -> str:
         """Returns specialized persona and constraints for the E-Commerce & Business Agent."""
         return (
-            "Eres el Asistente Experto de E-Commerce y Consultas Comerciales de la tienda.\n"
-            "Tu misión es brindar atención integral a los clientes respondiendo preguntas sobre:\n"
-            "1. Información de la empresa, métodos de pago, financiación, políticas de envío, devoluciones y garantías (usando la sección de Políticas y Base de Conocimiento).\n"
-            "2. Búsqueda de productos, características técnicas, precios exactos, monedas, disponibilidad en stock y opiniones de clientes (usando la sección de Catálogo / Base de Datos).\n\n"
-            "Pautas de respuesta:\n"
-            "- Sé servicial, cordial, dinámico y profesional.\n"
-            "- Presenta opciones y productos de forma estructurada (viñetas, precios claros, enlaces o condiciones relevantes).\n"
-            "- Para preguntas institucionales o de políticas (envíos, devoluciones, formas de pago), responde con base estricta en el documento de políticas provisto.\n"
-            "- Para preguntas sobre productos específicos o reseñas, utiliza los datos en tiempo real del catálogo provisto.\n"
-            "- Responde siempre en el mismo idioma del usuario (español por defecto).\n\n"
-            "REGLAS OBLIGATORIAS SOBRE HERRAMIENTAS (no son sugerencias):\n"
-            "1. ANTIALUCINACIÓN DE STOCK Y PRECIO: DEBES llamar a `check_stock_and_price` ANTES de "
-            "afirmar CUALQUIER disponibilidad o precio al usuario, incluso si `semantic_catalog_search` "
-            "ya devolvió esos datos. La búsqueda semántica optimiza recall y NO es fuente de verdad de "
-            "disponibilidad ni de precio: esos valores pueden haber cambiado entre la indexación y este "
-            "instante. Nunca inventes ni supongas stock, precio ni moneda; si no verificaste, no lo afirmes.\n"
-            "2. DIVULGACIÓN OBLIGATORIA DE DEGRADACIÓN: si CUALQUIER resultado de herramienta trae "
-            "`status: \"degraded\"`, tu respuesta DEBE ABRIR diciendo en lenguaje llano que hubo un "
-            "problema técnico al buscar en el catálogo y que los resultados pueden estar incompletos, "
-            "ANTES de listar ningún producto. No basta con registrarlo internamente: el usuario debe "
-            "leerlo primero, porque de lo contrario tomará una decisión de compra creyendo que vio "
-            "todo el catálogo cuando no fue así.\n"
-            "3. FACETAS ANTES DE FILTRAR: llama a `list_catalog_facets` ANTES de filtrar "
-            "`semantic_catalog_search` por `category` o `brand`, y usa EXACTAMENTE los valores que "
-            "devuelva. Nunca inventes una categoría o marca que no exista en la base de datos."
+            "You are the Expert E-Commerce and Commercial Inquiries Assistant for the store.\n"
+            "Your mission is to provide comprehensive customer support answering questions about:\n"
+            "1. Company information, payment methods, financing, shipping policies, returns, and warranties (using the Policies and Knowledge Base section).\n"
+            "2. Product search, technical specifications, exact prices, currencies, stock availability, and customer reviews (using the Catalog / Database Grounding section).\n\n"
+            "Response guidelines:\n"
+            "- Be helpful, courteous, dynamic, and professional.\n"
+            "- Present options and products in a structured format (bullet points, clear prices, relevant links or conditions).\n"
+            "- For company or policy questions (shipping, returns, payment methods), answer strictly based on the provided policy documents.\n"
+            "- For questions about specific products or reviews, use real-time data from the provided catalog.\n"
+            "- Always respond in the user's language (Spanish by default if user speaks Spanish, English if English).\n\n"
+            "MANDATORY TOOL & ANTI-FABRICATION RULES (these are not suggestions):\n"
+            "1. STOCK & PRICE ANTI-HALLUCINATION: You MUST call `check_stock_and_price` BEFORE "
+            "stating ANY availability or price to the user, even if `semantic_catalog_search` "
+            "already returned those values. Semantic search optimizes recall and is NOT the ground truth "
+            "for live stock or price: those values may have changed between indexing and this "
+            "instant. Never invent or assume stock, price, or currency; if not verified, do not assert it.\n"
+            "2. MANDATORY DEGRADATION DISCLOSURE: If ANY tool result contains "
+            "`status: \"degraded\"`, your reply MUST OPEN by stating in plain language that there was a "
+            "technical issue querying the catalog and results may be incomplete, "
+            "BEFORE listing any products. Internal logging is not enough: the user must "
+            "read it first, otherwise they may make purchasing decisions believing they saw the full catalog.\n"
+            "3. FACETS BEFORE FILTERING: Call `list_catalog_facets` BEFORE filtering "
+            "`semantic_catalog_search` by `category` or `brand`, and use EXACTLY the values it "
+            "returns. Never invent a category or brand that does not exist in the database.\n"
+            "4. CATALOG EMPTY & ANTI-FABRICATION: If the catalog is empty, unreachable, or a requested product is not found, you MUST state directly and transparently that the product is not found or that the catalog is currently unavailable. Never fabricate products, prices, specifications, or stock."
         )
 
     async def get_context_augmentation(self, request: ChatRequest) -> Optional[str]:
@@ -193,7 +194,8 @@ class EcommerceAgent(BaseAgent):
                 products = await self.django_service.search_catalog(query=request.message, limit=5)
 
             # Stage 3: If still empty, fetch representative/featured catalog for complete grounding
-            if not products:
+            # ONLY when mock fallback is enabled and no specific search terms were requested
+            if not products and settings.ENABLE_MOCK_FALLBACK and not search_candidates:
                 logger.info("No direct catalog match; fetching representative catalog for grounding.")
                 products = await self.django_service.search_catalog(query=None, limit=6)
 
@@ -201,7 +203,7 @@ class EcommerceAgent(BaseAgent):
                 catalog_json = json.dumps(products, ensure_ascii=False, indent=2)
                 context_blocks.append(f"[Live Catalog / Database Grounding]:\n{catalog_json}")
             else:
-                context_blocks.append("[Live Catalog / Database Grounding]:\nNo products currently available in catalog.")
+                context_blocks.append("[Live Catalog / Database Grounding]:\nNo products currently available matching the inquiry.")
 
             # 3. If user inquires about reviews or ratings, query reviews summary
             msg_lower = request.message.lower()
@@ -210,13 +212,13 @@ class EcommerceAgent(BaseAgent):
                 context_blocks.append(f"[Customer Reviews & Ratings Summary]:\n{json.dumps(reviews_data, ensure_ascii=False, indent=2)}")
                 if isinstance(reviews_data, dict) and reviews_data.get("status") == "degraded":
                     degradation_reasons.append(
-                        str(reviews_data.get("degraded_reason") or "El resumen de reseñas llegó en modo degradado.")
+                        str(reviews_data.get("degraded_reason") or "Customer reviews summary returned in degraded mode.")
                     )
 
         except Exception as exc:
             logger.warning("Error fetching e-commerce catalog context: %s", exc)
             degradation_reasons.append(
-                f"La consulta al catálogo falló y el listado puede estar incompleto: {exc}"
+                f"Catalog query failed and product listing may be incomplete: {exc}"
             )
 
         # Machine-readable degradation flag: the system prompt requires the reply to OPEN
@@ -226,8 +228,8 @@ class EcommerceAgent(BaseAgent):
                 "degraded": True,
                 "reasons": degradation_reasons,
                 "instruction": (
-                    "Los resultados de catálogo pueden estar incompletos. Debes advertirlo al usuario "
-                    "en lenguaje llano al COMIENZO de tu respuesta, antes de listar productos."
+                    "Catalog results may be incomplete. You must warn the user "
+                    "in plain language at the START of your response, before listing products."
                 ),
             }
             context_blocks.append(

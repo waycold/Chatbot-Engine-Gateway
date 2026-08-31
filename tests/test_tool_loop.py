@@ -14,6 +14,7 @@ import pytest
 from app.agents import base as agent_base
 from app.agents.base import (
     CONTEXT_TRUNCATION_MARKER,
+    NO_TOOLS_HALLUCINATION_GUARDRAIL,
     BaseAgent,
     _build_function_response_parts,
 )
@@ -133,6 +134,30 @@ class ExplodingLLMService(ScriptedLLMService):
         """Simulates a 503 from the provider."""
         self.calls += 1
         raise RuntimeError("503 Service Unavailable from the model provider")
+
+
+class CapturingExplodingLLMService(ExplodingLLMService):
+    """Like `ExplodingLLMService`, but records the ungrounded fallback's `system_instruction`.
+
+    Used to verify the anti-hallucination guardrail (`NO_TOOLS_HALLUCINATION_GUARDRAIL`)
+    reaches the exact call that has zero tool grounding: the `generate_content` /
+    `generate_content_stream` fallback made after `run_tool_loop` gives up and returns "".
+    """
+
+    def __init__(self, tool_turns_to_request: int = 1, tool_name: str = "list_catalog_facets") -> None:
+        super().__init__(tool_turns_to_request=tool_turns_to_request, tool_name=tool_name)
+        self.captured_system_instruction: Optional[str] = None
+
+    async def generate_content(self, contents: Any, system_instruction: Any = None, model: Any = None, **kwargs: Any) -> str:
+        """Records the instruction it received and answers as the simple path would."""
+        self.captured_system_instruction = system_instruction
+        return "Respuesta generada por la ruta simple."
+
+    async def generate_content_stream(self, contents: Any, system_instruction: Any = None, model: Any = None, **kwargs: Any) -> Any:
+        """Records the instruction it received and streams a short scripted answer."""
+        self.captured_system_instruction = system_instruction
+        for token in ["Respuesta ", "generada ", "por ", "la ", "ruta ", "simple."]:
+            yield token
 
 
 class StubKnowledgeBase:
@@ -1588,3 +1613,91 @@ class TestGroundingContextTruncation:
 
         assert "PRIMERO" in text
         assert "ULTIMO" not in text
+
+
+# ==============================================================================
+# Anti-hallucination guardrail on the ungrounded "no tools ran" fallback
+# ==============================================================================
+
+class _StubNoHistoryMemory:
+    """Memory double with no history, so `process()` needs no real Redis/store."""
+
+    async def get_history(self, session_id: str, limit: int = 8) -> list[dict[str, Any]]:
+        """Returns an empty transcript."""
+        return []
+
+    async def add_message(self, session_id: str, role: str, content: str) -> None:
+        """Discards the turn; persistence is irrelevant to these tests."""
+        return None
+
+
+class _StubPortfolioDjango:
+    """Django double covering the one call `PortfolioAgent.get_context_augmentation` makes."""
+
+    async def get_portfolio_data(self) -> dict[str, Any]:
+        """Returns a tiny static profile payload."""
+        return {"name": "Facundo", "role": "Senior Fullstack & AI Engineer"}
+
+
+class TestNoToolsHallucinationGuardrail:
+    """Protects the fallback turn that runs with literally zero tool grounding.
+
+    `_execute_process` / `_execute_process_stream` both fall back to a plain
+    `generate_content` / `generate_content_stream` call -- no tool declarations at all
+    -- whenever `run_tool_loop` gives up and returns "" (its own provider call raised,
+    or tool calling is disabled/unavailable this turn). Without a guardrail, that call
+    is free to answer a stock/price/availability question straight out of the model's
+    training data, which is exactly the hallucination the whole tool-loop architecture
+    exists to prevent. These tests protect the actual wiring, not just the constant's
+    existence: it must reach that one call, and must cost tool-less agents nothing.
+    """
+
+    @pytest.mark.asyncio
+    async def test_guardrail_reaches_the_fallback_after_the_tool_loop_fails(self) -> None:
+        """A mid-conversation provider outage inside `run_tool_loop` must not leave the
+        ungrounded fallback call free to invent stock/price/availability answers.
+        """
+        llm = CapturingExplodingLLMService()
+        agent = build_agent(llm)
+
+        response = await agent.process(make_request())
+
+        assert response.message == "Respuesta generada por la ruta simple."
+        assert llm.captured_system_instruction is not None
+        assert NO_TOOLS_HALLUCINATION_GUARDRAIL in llm.captured_system_instruction
+
+    @pytest.mark.asyncio
+    async def test_guardrail_reaches_the_streaming_fallback_after_the_tool_loop_fails(self) -> None:
+        """Protects the streaming twin of the test above: same failure, same guarantee."""
+        llm = CapturingExplodingLLMService()
+        agent = build_agent(llm)
+
+        chunks = [token async for token in agent.process_stream(make_request())]
+
+        assert "".join(chunks) == "Respuesta generada por la ruta simple."
+        assert llm.captured_system_instruction is not None
+        assert NO_TOOLS_HALLUCINATION_GUARDRAIL in llm.captured_system_instruction
+
+    @pytest.mark.asyncio
+    async def test_tool_less_agent_fallback_does_not_get_the_guardrail(self) -> None:
+        """Protects `PortfolioAgent` (and any other tool-less agent) from a needless cost.
+
+        These agents never ground facts via tool calls in the first place -- their
+        ordinary answer path IS this fallback -- so appending a guardrail meant for a
+        degraded tool loop would be pure noise on every single turn they ever run.
+        `get_tool_declarations` returns `[]` for them, which is the condition the guard
+        helper keys off of.
+        """
+        llm = CapturingExplodingLLMService()
+        agent = PortfolioAgent()
+        agent.llm_service = llm
+        agent.django_service = _StubPortfolioDjango()
+        agent.memory_service = _StubNoHistoryMemory()
+
+        response = await agent.process(
+            ChatRequest(agent_id="portfolio", session_id="s", message="hola", stream=False)
+        )
+
+        assert response.message == "Respuesta generada por la ruta simple."
+        assert llm.captured_system_instruction is not None
+        assert NO_TOOLS_HALLUCINATION_GUARDRAIL not in llm.captured_system_instruction

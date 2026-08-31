@@ -97,7 +97,7 @@ class AnalyticsAgent(BaseAgent):
         super().__init__(
             agent_id=agent_id,
             name="Analytics & Business Metrics Agent",
-            description="Ejecuta consultas analíticas avanzadas, métricas de ventas, rentabilidad, inventario, segmentación de clientes y consultas SQL seguras.",
+            description="Executes advanced analytical queries, sales metrics, profitability, inventory, customer segmentation, and safe SQL queries.",
             capabilities=[
                 "sales_analytics",
                 "inventory_health",
@@ -269,20 +269,21 @@ class AnalyticsAgent(BaseAgent):
     async def get_system_instruction(self, request: ChatRequest) -> str:
         """Returns specialized persona and constraints for the Analytics Agent."""
         return (
-            "Eres el Asistente Analista de Datos y Métricas de Negocio (Business Intelligence & Analytics Agent). "
-            "Tu misión es interpretar consultas sobre KPIs, ventas, rentabilidad/márgenes, salud de inventario, "
-            "embudos de conversión (funnel), segmentación de clientes (RFM), reseñas y consultas SQL.\n\n"
-            "Pautas de respuesta:\n"
-            "1. Presenta las métricas de forma estructurada, utilizando tablas en Markdown, listas ordenadas y destacados en negrita.\n"
-            "2. Proporciona resúmenes ejecutivos con observaciones clave, tendencias y recomendaciones prácticas accionables.\n"
-            "3. En consultas de SQL sandbox, muestra los resultados tabulados y aclara que opera en modo solo lectura de seguridad.\n"
-            "4. Si los datos indican que el token de usuario no es válido o falta autenticación para métricas restringidas, "
-            "explica amablemente que se requiere un token JWT con privilegios analíticos.\n"
-            "5. Sé riguroso, objetivo y exacto: no inventes cifras fuera de los datos provistos en el contexto.\n"
-            "6. IMPORTANTE: cuando el usuario especifique un periodo temporal (mes, trimestre, año, rango de fechas), "
-            "los datos que presentes DEBEN corresponder EXCLUSIVAMENTE a ese periodo — nunca al acumulado histórico general. "
-            "Si el contexto de datos muestra 'date_from' y 'date_to', esos son los límites del análisis. "
-            "No mezcles ni confundas ingresos acumulados históricos con ingresos del periodo solicitado."
+            "You are the Business Intelligence and Analytics Agent (BI & Analytics Assistant). "
+            "Your mission is to interpret inquiries regarding KPIs, sales, profitability/margins, inventory health, "
+            "conversion funnels, customer segmentation (RFM), customer reviews, and SQL queries.\n\n"
+            "Response guidelines:\n"
+            "1. Present metrics in a structured format, using Markdown tables, ordered lists, and bold highlights.\n"
+            "2. Provide executive summaries with key observations, trends, and practical actionable recommendations.\n"
+            "3. For SQL sandbox queries, display tabular results and clarify that operations run in read-only security mode.\n"
+            "4. If data indicates the user token is invalid or authentication is missing for restricted metrics, "
+            "politely explain that a valid JWT token with analytics privileges is required.\n"
+            "5. Be rigorous, objective, and accurate: do not invent numbers outside the data provided in context.\n"
+            "6. IMPORTANT: When the user specifies a time period (month, quarter, year, date range), "
+            "the data you present MUST correspond EXCLUSIVELY to that period — never to the general historical accumulated total. "
+            "If the data context shows 'date_from' and 'date_to', those are the boundaries of the analysis. "
+            "Do not mix or confuse historical accumulated revenue with revenue for the requested period.\n"
+            "7. DATA AVAILABILITY & ANTI-FABRICATION: If the data context indicates that the database or analytics service is unavailable, returned an error, or contains empty/missing data, you MUST state directly, concisely, and transparently that you currently do not have the required data to answer the inquiry. DO NOT fabricate numbers, mock inventory/products, or generate executive summaries and recommendations for non-existent or inaccessible data."
         )
 
     async def get_context_augmentation(self, request: ChatRequest) -> Optional[str]:
@@ -352,19 +353,19 @@ class AnalyticsAgent(BaseAgent):
                     context_data["sql_results"] = {
                         "status": "error",
                         "blocked": True,
-                        "error": "Acceso denegado: la consola SQL requiere un token JWT de staff válido.",
+                        "error": "Access denied (Acceso denegado): SQL console requires a valid staff JWT token.",
                     }
 
             # 2. Check for Inventory Health
-            elif any(k in msg_lower for k in ["stock", "inventario", "agotado", "agotados", "crítico", "critico", "runout", "cobertura"]):
-                status_filter = "critical" if "crítico" in msg_lower or "critico" in msg_lower else "all"
+            elif any(k in msg_lower for k in ["stock", "inventario", "agotado", "agotados", "crítico", "critico", "runout", "cobertura", "inventory"]):
+                status_filter = "critical" if "crítico" in msg_lower or "critico" in msg_lower or "critical" in msg_lower else "all"
                 inv_res = await self.django_service.get_inventory_health(status_filter=status_filter, user_token=user_token)
                 context_data["tool_invoked"] = "get_inventory_health"
                 context_data["inventory_health"] = inv_res
 
             # 3. Check for Margins & Profitability
-            elif any(k in msg_lower for k in ["margen", "márgenes", "margenes", "rentabilidad", "ganancia", "profit", "markup"]):
-                group_by = "category" if "categoría" in msg_lower or "categoria" in msg_lower else "product"
+            elif any(k in msg_lower for k in ["margen", "márgenes", "margenes", "rentabilidad", "ganancia", "profit", "markup", "margin", "profitability"]):
+                group_by = "category" if "categoría" in msg_lower or "categoria" in msg_lower or "category" in msg_lower else "product"
                 margin_res = await self.django_service.get_product_profitability(
                     group_by=group_by,
                     date_from=date_from,
@@ -375,20 +376,20 @@ class AnalyticsAgent(BaseAgent):
                 context_data["margins_and_profitability"] = margin_res
 
             # 4. Check for Conversion Funnel & Abandoned Carts
-            elif any(k in msg_lower for k in ["funnel", "embudo", "carrito", "carritos", "abandono", "checkout", "cupon", "cupón", "cupones"]):
+            elif any(k in msg_lower for k in ["funnel", "embudo", "carrito", "carritos", "abandono", "checkout", "cupon", "cupón", "cupones", "cart", "coupon"]):
                 funnel_res = await self.django_service.get_funnel_and_cart_metrics(timeframe="30d", user_token=user_token)
                 context_data["tool_invoked"] = "get_funnel_and_cart_metrics"
                 context_data["funnel_and_cart_metrics"] = funnel_res
 
             # 5. Check for Reviews & Customer Sentiment
-            elif any(k in msg_lower for k in ["reseña", "reseñas", "review", "reviews", "calificación", "calificacion", "estrellas", "satisfacción", "satisfaccion", "opinion", "opiniones"]):
+            elif any(k in msg_lower for k in ["reseña", "reseñas", "review", "reviews", "calificación", "calificacion", "estrellas", "satisfacción", "satisfaccion", "opinion", "opiniones", "rating", "sentiment"]):
                 reviews_res = await self.django_service.get_customer_reviews_summary(user_token=user_token)
                 context_data["tool_invoked"] = "get_customer_reviews_summary"
                 context_data["reviews_summary"] = reviews_res
 
             # 6. Check for Customer Insights & RFM Segmentation
-            elif any(k in msg_lower for k in ["cliente", "clientes", "rfm", "vip", "ltv", "churn", "en riesgo", "segmento", "segmentación", "segmentacion"]):
-                segment = "vip" if "vip" in msg_lower else ("at_risk" if "riesgo" in msg_lower else "all")
+            elif any(k in msg_lower for k in ["cliente", "clientes", "rfm", "vip", "ltv", "churn", "en riesgo", "segmento", "segmentación", "segmentacion", "customer", "customers", "segment"]):
+                segment = "vip" if "vip" in msg_lower else ("at_risk" if "riesgo" in msg_lower or "risk" in msg_lower else "all")
                 rfm_res = await self.django_service.get_customer_segmentation(segment=segment, user_token=user_token)
                 context_data["tool_invoked"] = "get_customer_segmentation"
                 context_data["customer_segmentation"] = rfm_res
@@ -434,7 +435,9 @@ class AnalyticsAgent(BaseAgent):
 
         except Exception as exc:
             logger.warning("Error querying analytics data: %s", exc)
-            return f"=== ANALYTICS DATA ===\nAuth Status: {json.dumps(auth_status)}"
+            context_data["status"] = "error"
+            context_data["error"] = f"Analytics service error: {exc}"
+            return f"=== ANALYTICS & BI LIVE DATA ===\n{json.dumps(context_data, ensure_ascii=False, indent=2)}"
 
     async def process(self, request: ChatRequest) -> ChatResponse:
         """Processes a chat request and returns a complete response."""
