@@ -5,14 +5,11 @@ from typing import Any, AsyncGenerator, Optional
 from app.agents.analytics import AnalyticsAgent, _is_staff, set_auth_status
 from app.agents.base import BaseAgent, EventSink
 from app.agents.ecommerce import EcommerceAgent
+from app.agents.exceptions import AgentAuthorizationError
 from app.agents.portfolio import PortfolioAgent
 from app.schemas.payload import AgentInfo, ChatRequest, ChatResponse
 
 logger = logging.getLogger("ai_gateway.dispatcher")
-
-# Agent that privileged requests are downgraded to when authorization fails. A shopper
-# who happens to type "reporte" should still get a helpful answer, not an error page.
-DOWNGRADE_AGENT_ID = "ecommerce"
 
 
 class AgentDispatcher:
@@ -92,12 +89,15 @@ class AgentDispatcher:
         return self.get(self.classify_intent(message))
 
     async def _authorize_agent(self, agent: BaseAgent, request: ChatRequest) -> BaseAgent:
-        """Enforces staff-gated routing, downgrading unauthorized analytics requests.
+        """Enforces staff-gated routing, rejecting unauthorized analytics requests.
 
-        This is the outermost authorization layer: an unauthenticated caller never even
-        reaches the analytics agent, let alone its tools. It complements — and does not
-        replace — the per-agent schema gate and the `execute_tool` allowlist. Every
-        failure mode (missing token, invalid token, validation error) fails closed.
+        This is the outermost authorization layer: an unauthenticated or non-staff
+        caller never even reaches the analytics agent, let alone its tools. It
+        complements — and does not replace — the per-agent schema gate and the
+        `execute_tool` allowlist. Every failure mode (missing token, invalid token,
+        validation error) fails closed and raises `AgentAuthorizationError` — there is
+        no code path where an analytics request silently ends up executing on a
+        different agent.
 
         Privilege is read from Django's native `auth_user` booleans (`is_staff` /
         `is_superuser`) exactly as `validate_user_token` normalized them; `auth_user` has
@@ -108,7 +108,12 @@ class AgentDispatcher:
             request: The incoming chat request.
 
         Returns:
-            The original agent when authorized, otherwise the downgrade agent.
+            The original agent, unchanged, once authorization succeeds.
+
+        Raises:
+            AgentAuthorizationError: 401 when no `user_token` was presented at all, 403
+                when a token was presented but does not carry staff privilege (invalid
+                token, non-staff account, or a validation failure — all fail closed).
         """
         if agent.agent_id != "analytics":
             return agent
@@ -145,17 +150,18 @@ class AgentDispatcher:
             return agent
 
         logger.warning(
-            "Downgrading analytics request for session '%s' to '%s': caller is not staff.",
-            request.session_id, DOWNGRADE_AGENT_ID,
+            "Rejecting analytics request for session '%s': caller is not staff.",
+            request.session_id,
         )
-        try:
-            return self.get(DOWNGRADE_AGENT_ID)
-        except KeyError:
-            logger.error(
-                "Downgrade agent '%s' is not registered; keeping analytics with tools withheld.",
-                DOWNGRADE_AGENT_ID,
+        if not request.user_token:
+            raise AgentAuthorizationError(
+                status_code=401,
+                message="Analytics access requires authentication. Please sign in with a staff account.",
             )
-            return agent
+        raise AgentAuthorizationError(
+            status_code=403,
+            message="Analytics access requires staff privileges. Your account does not have the required role.",
+        )
 
     @staticmethod
     def _accepts_event_sink(stream_callable: Any) -> bool:

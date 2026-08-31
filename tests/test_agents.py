@@ -104,6 +104,87 @@ class TestBaseAgent:
 
 
 # ==============================================================================
+# Session memory isolation per agent_id (fix/agent-isolation-and-routing)
+# ==============================================================================
+
+class _CannedHistoryMemory:
+    """Memory double that replays a fixed, pre-tagged transcript on every read."""
+
+    def __init__(self, history: list[dict[str, Any]]) -> None:
+        self._history = history
+
+    async def get_history(self, session_id: str, limit: int = 8) -> list[dict[str, Any]]:
+        return self._history
+
+    async def add_message(self, *args: Any, **kwargs: Any) -> None:
+        return None
+
+
+class TestSessionMemoryIsolatedPerAgent:
+    """REGRESSION (diagnóstico hallazgo F): a shared session_id must not leak one
+    agent's prior turns into another agent's prompt.
+
+    `RedisMemoryService.add_message` now tags every stored message with the producing
+    `agent_id`; `BaseAgent.build_conversation_contents` must drop any `role: "model"`
+    turn whose `agent_id` is set and differs from the agent building the prompt, while
+    still including legacy turns whose `agent_id` is `None`.
+    """
+
+    @staticmethod
+    def _texts(contents: list[dict[str, Any]]) -> list[str]:
+        return [c["parts"][0]["text"] for c in contents]
+
+    @pytest.mark.asyncio
+    async def test_analytics_agent_does_not_replay_ecommerce_turns(self) -> None:
+        """A session that talked to Ecommerce first must not resurface as Analytics history."""
+        history = [
+            {"role": "user", "content": "cual es el precio del curso?", "agent_id": "ecommerce"},
+            {"role": "model", "content": "respuesta de ecommerce", "agent_id": "ecommerce"},
+        ]
+        agent = MockAnalyticsAgent(agent_id="analytics")
+        agent.memory_service = _CannedHistoryMemory(history)
+
+        contents = await agent.build_conversation_contents(
+            ChatRequest(agent_id="analytics", session_id="s1", message="dame el reporte de ventas")
+        )
+
+        assert not any("respuesta de ecommerce" in text for text in self._texts(contents))
+
+    @pytest.mark.asyncio
+    async def test_agent_replays_its_own_prior_turns(self) -> None:
+        """The same agent's own history must still be included, unfiltered."""
+        history = [
+            {"role": "user", "content": "hola", "agent_id": "analytics"},
+            {"role": "model", "content": "respuesta previa de analytics", "agent_id": "analytics"},
+        ]
+        agent = MockAnalyticsAgent(agent_id="analytics")
+        agent.memory_service = _CannedHistoryMemory(history)
+
+        contents = await agent.build_conversation_contents(
+            ChatRequest(agent_id="analytics", session_id="s1", message="seguimos")
+        )
+
+        assert any("respuesta previa de analytics" in text for text in self._texts(contents))
+
+    @pytest.mark.asyncio
+    async def test_legacy_untagged_turns_are_still_included(self) -> None:
+        """Backward compatibility: messages saved before agent_id existed (agent_id=None)
+        must still be included, regardless of which agent reads them.
+        """
+        history = [
+            {"role": "model", "content": "respuesta legacy sin agent_id", "agent_id": None},
+        ]
+        agent = MockEcommerceAgent(agent_id="ecommerce")
+        agent.memory_service = _CannedHistoryMemory(history)
+
+        contents = await agent.build_conversation_contents(
+            ChatRequest(agent_id="ecommerce", session_id="s1", message="sigue disponible?")
+        )
+
+        assert any("respuesta legacy sin agent_id" in text for text in self._texts(contents))
+
+
+# ==============================================================================
 # Ecommerce Agent Product Extraction & Hybrid Context Tests (Ticket BE-02 & BE-04)
 # ==============================================================================
 

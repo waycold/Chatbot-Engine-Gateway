@@ -7,6 +7,7 @@ from typing import Any, AsyncGenerator
 from fastapi import APIRouter, HTTPException, Path, status
 from fastapi.responses import StreamingResponse
 from app.agents.dispatcher import get_agent_dispatcher
+from app.agents.exceptions import AgentAuthorizationError
 from app.schemas.payload import (
     AgentListResponse,
     ChatRequest,
@@ -47,6 +48,11 @@ async def chat_completion(request: ChatRequest) -> ChatResponse:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc),
+        ) from exc
+    except AgentAuthorizationError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=exc.message,
         ) from exc
     except LLMRateLimitError as exc:
         raise HTTPException(
@@ -107,6 +113,11 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc),
+        ) from exc
+    except AgentAuthorizationError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=exc.message,
         ) from exc
     except Exception as exc:
         logger.error("Failed to initialize stream dispatcher: %s", exc)

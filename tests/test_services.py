@@ -381,6 +381,27 @@ class TestRedisMemoryService:
         assert history[2] == "User: Necesito soporte"
 
     @pytest.mark.asyncio
+    async def test_add_message_persists_agent_id(self, mock_memory_service: RedisMemoryService) -> None:
+        """REGRESSION (session isolation): `agent_id` must round-trip through storage.
+
+        `build_conversation_contents` (app/agents/base.py) relies on this tag being
+        present on read to filter out another agent's turns from a shared session_id.
+        """
+        await mock_memory_service.add_message(
+            session_id="sess_iso_1", role="model", content="respuesta de ecommerce", agent_id="ecommerce",
+        )
+        await mock_memory_service.add_message(
+            session_id="sess_iso_1", role="model", content="respuesta de analytics", agent_id="analytics",
+        )
+        await mock_memory_service.add_message(
+            session_id="sess_iso_1", role="model", content="respuesta legacy sin tag",
+        )
+
+        history = await mock_memory_service.get_history("sess_iso_1", limit=10)
+
+        assert [item["agent_id"] for item in history] == ["ecommerce", "analytics", None]
+
+    @pytest.mark.asyncio
     async def test_memory_service_redis_failure_resilience(self) -> None:
         """Verifies handling when Redis connection fails or disconnects."""
         failing_client = AsyncMock()

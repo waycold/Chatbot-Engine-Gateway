@@ -144,7 +144,7 @@ Authorization is enforced in **three independent layers**, so no single mistake 
 
 | Layer | Where | What it does |
 | :--- | :--- | :--- |
-| **1. Routing gate** | `AgentDispatcher._authorize_agent` | A request routed to `analytics` without a valid staff identity is **downgraded to the ecommerce agent** — an anonymous shopper who typed "reporte" still gets a helpful answer instead of an error. Fails closed on any validation error. |
+| **1. Routing gate** | `AgentDispatcher._authorize_agent` | A request routed to `analytics` without a valid staff identity is **rejected with `AgentAuthorizationError`** — HTTP 401 when no `user_token` was presented, 403 when a token was presented but is not staff — instead of being silently re-executed by another agent. Fails closed on any validation error. |
 | **2. Schema gate** | `BaseAgent.get_tool_declarations` | The tool schema is never included in the tool list sent to the model. `EcommerceAgent` is shown the 4 catalog tools **only**; `AnalyticsAgent` is shown `execute_raw_sql_sandbox` **only** when the current turn's token has already validated as staff. |
 | **3. Dispatch allowlist** | `execute_tool(..., allowed_tools=...)` | The tool name is re-checked server-side at dispatch time and refused with `{"status": "error", "blocked": true}` before any call is made — so a hallucinated or injected tool name cannot execute even if it names a schema the model was never shown. |
 
@@ -262,7 +262,7 @@ The gateway provides a modular orchestration system (`AgentDispatcher`) designed
 
 | Agent | Identifier | Domain & Specialization | Key Capabilities |
 | :--- | :---: | :--- | :--- |
-| **Analytics & BI** | `analytics` | Business intelligence, sales performance, traffic metrics, inventory health, margins, and the staff-gated SQL sandbox. Requires a staff JWT; other callers are downgraded to `ecommerce`. | `sales_analytics`, `inventory_health`, `product_profitability`, `conversion_funnel`, `customer_rfm_segmentation`, `safe_sql_sandbox` 🔒 |
+| **Analytics & BI** | `analytics` | Business intelligence, sales performance, traffic metrics, inventory health, margins, and the staff-gated SQL sandbox. Requires a staff JWT; other callers get an explicit 401/403 rejection, never a silent handoff to `ecommerce`. | `sales_analytics`, `inventory_health`, `product_profitability`, `conversion_funnel`, `customer_rfm_segmentation`, `safe_sql_sandbox` 🔒 |
 | **E-Commerce & Catalog** | `ecommerce` | Hybrid business knowledge, semantic (pgvector) catalog retrieval, real-time stock and price verification, reviews, and purchase guidance. | `product_search`, `semantic_search`, `price_inquiry`, `stock_check`, `shipping_policies`, `refund_policies`, `payment_methods` |
 | **Portfolio & Tech CV** | `portfolio` | Professional background, live tech stack showcase, architectural design review, and contact info. | `cv_inquiry`, `skills_overview`, `projects_showcase`, `architecture_consulting` |
 | **Auto-Router** | `auto` | Heuristic & semantic classifier that automatically resolves and delegates messages to the optimal agent. | `intent_classification`, `fallback_routing` |

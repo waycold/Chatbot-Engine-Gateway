@@ -1626,7 +1626,9 @@ class _StubNoHistoryMemory:
         """Returns an empty transcript."""
         return []
 
-    async def add_message(self, session_id: str, role: str, content: str) -> None:
+    async def add_message(
+        self, session_id: str, role: str, content: str, agent_id: str | None = None, ttl: int | None = None,
+    ) -> None:
         """Discards the turn; persistence is irrelevant to these tests."""
         return None
 

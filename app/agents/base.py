@@ -194,6 +194,17 @@ class BaseAgent(ABC):
         contents: list[dict[str, Any]] = []
 
         for item in history:
+            # Cross-agent isolation: a `session_id` can be reused across agents (e.g. a
+            # caller that talked to Ecommerce and is now talking to Analytics). A
+            # `role: "model"` turn tagged with a DIFFERENT agent_id was produced by
+            # another agent's persona/tools and must not be replayed as this agent's
+            # own prior answer. Legacy turns saved before this field existed carry
+            # `agent_id: None` and are still included for backward compatibility — they
+            # decay naturally with the session TTL.
+            item_agent = item.get("agent_id")
+            if item.get("role") == "model" and item_agent not in (None, self.agent_id):
+                continue
+
             role = "user" if item.get("role") == "user" else "model"
             contents.append({
                 "role": role,
@@ -553,10 +564,19 @@ class BaseAgent(ABC):
         return chunks
 
     async def save_turn(self, session_id: str, user_message: str, model_response: str) -> None:
-        """Persists the turn (user message + model response) into session memory."""
+        """Persists the turn (user message + model response) into session memory.
+
+        Both messages are tagged with `self.agent_id` so a session that later switches
+        agents (same `session_id`) can filter out turns that belong to a different
+        agent — see `build_conversation_contents`.
+        """
         try:
-            await self.memory_service.add_message(session_id=session_id, role="user", content=user_message)
-            await self.memory_service.add_message(session_id=session_id, role="model", content=model_response)
+            await self.memory_service.add_message(
+                session_id=session_id, role="user", content=user_message, agent_id=self.agent_id,
+            )
+            await self.memory_service.add_message(
+                session_id=session_id, role="model", content=model_response, agent_id=self.agent_id,
+            )
         except Exception as exc:
             logger.warning("Failed to save conversation turn for session %s: %s", session_id, exc)
 

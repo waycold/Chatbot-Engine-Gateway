@@ -9,7 +9,9 @@ its own, because a defence that is only tested through the layer in front of it 
 defence nobody notices losing:
 
   Layer 0 — `AgentDispatcher._authorize_agent`: a non-staff caller never reaches the
-            analytics agent at all; the request is downgraded to the e-commerce agent.
+            analytics agent at all; the request is rejected outright with
+            `AgentAuthorizationError` (401 with no token, 403 with a non-staff token) —
+            it is never silently re-executed on the e-commerce agent.
   Layer 1 — `get_tool_declarations`: the privileged schema is never shown to the model,
             so it has no way to learn the tool exists.
   Layer 2 — `execute_tool(allowed_tools=...)`: the tool name is re-checked at dispatch
@@ -34,6 +36,7 @@ from app.agents.analytics import (
 )
 from app.agents.dispatcher import AgentDispatcher
 from app.agents.ecommerce import EcommerceAgent
+from app.agents.exceptions import AgentAuthorizationError
 from app.agents.portfolio import PortfolioAgent
 from app.agents.tools import (
     ANALYTICS_TOOL_DECLARATIONS,
@@ -593,7 +596,7 @@ class TestAnalyticsToolSchemaExposure:
 
 
 # ==============================================================================
-# Layer 0 — dispatcher downgrade
+# Layer 0 — dispatcher rejection (401/403)
 # ==============================================================================
 
 class TestDispatcherAuthorization:
@@ -614,32 +617,35 @@ class TestDispatcherAuthorization:
         return dispatcher, analytics
 
     @pytest.mark.asyncio
-    async def test_anonymous_analytics_request_is_downgraded_to_ecommerce(self) -> None:
+    async def test_anonymous_analytics_request_is_rejected_with_401(self) -> None:
         """Protects layer 0: an anonymous 'dame el reporte' never reaches analytics.
 
-        Downgrading rather than erroring is deliberate — a shopper who happens to type
-        "reporte" should still get a helpful answer.
+        Rejecting explicitly (rather than silently downgrading to ecommerce) is
+        deliberate: a caller asking for analytics without any credentials gets a clear
+        401, never a 200 answered by a different agent's persona.
         """
         _auth_status_var.set(None)
         dispatcher, analytics = self._dispatcher_with(ANONYMOUS)
 
-        resolved = await dispatcher._authorize_agent(
-            analytics, make_request("dame el reporte de KPIs", agent_id="analytics")
-        )
+        with pytest.raises(AgentAuthorizationError) as exc_info:
+            await dispatcher._authorize_agent(
+                analytics, make_request("dame el reporte de KPIs", agent_id="analytics")
+            )
 
-        assert resolved.agent_id == "ecommerce"
+        assert exc_info.value.status_code == 401
 
     @pytest.mark.asyncio
-    async def test_authenticated_non_staff_analytics_request_is_downgraded(self) -> None:
+    async def test_authenticated_non_staff_analytics_request_is_rejected_with_403(self) -> None:
         """Protects against a valid customer token reaching the analytics agent."""
         _auth_status_var.set(None)
         dispatcher, analytics = self._dispatcher_with(CUSTOMER)
 
-        resolved = await dispatcher._authorize_agent(
-            analytics, make_request("dame el reporte", agent_id="analytics", user_token="customer-token-123")
-        )
+        with pytest.raises(AgentAuthorizationError) as exc_info:
+            await dispatcher._authorize_agent(
+                analytics, make_request("dame el reporte", agent_id="analytics", user_token="customer-token-123")
+            )
 
-        assert resolved.agent_id == "ecommerce"
+        assert exc_info.value.status_code == 403
 
     @pytest.mark.asyncio
     async def test_staff_analytics_request_is_left_alone(self) -> None:
@@ -658,20 +664,22 @@ class TestDispatcherAuthorization:
         """Protects against an auth-service outage becoming an authorization bypass.
 
         This is the direction that matters: when the validator is unreachable the answer
-        must be "not staff", never "assume staff".
+        must be "not staff", never "assume staff" — and, since a (unverifiable) token WAS
+        presented, the rejection must be 403, not 401.
         """
         _auth_status_var.set(None)
         dispatcher, analytics = self._dispatcher_with(RuntimeError("auth service unreachable"))
 
-        resolved = await dispatcher._authorize_agent(
-            analytics, make_request("dame el reporte", agent_id="analytics", user_token="whatever-token")
-        )
+        with pytest.raises(AgentAuthorizationError) as exc_info:
+            await dispatcher._authorize_agent(
+                analytics, make_request("dame el reporte", agent_id="analytics", user_token="whatever-token")
+            )
 
-        assert resolved.agent_id == "ecommerce"
+        assert exc_info.value.status_code == 403
 
     @pytest.mark.asyncio
-    async def test_unreachable_django_downgrades_instead_of_granting_analytics(self) -> None:
-        """REGRESSION: an unreachable auth service must still produce a downgrade.
+    async def test_unreachable_django_rejects_instead_of_granting_analytics(self) -> None:
+        """REGRESSION: an unreachable auth service must still produce an explicit rejection.
 
         This closes the loop on the fail-open bypass. `_authorize_agent` is exercised
         against the REAL `DjangoAPIService` pointed at a dead port — no token stub — so
@@ -684,12 +692,13 @@ class TestDispatcherAuthorization:
         analytics = dispatcher.get("analytics")
         analytics.django_service = DjangoAPIService(base_url="http://127.0.0.1:9")
 
-        resolved = await dispatcher._authorize_agent(
-            analytics,
-            make_request("dame el reporte", agent_id="analytics", user_token="z" * 40),
-        )
+        with pytest.raises(AgentAuthorizationError) as exc_info:
+            await dispatcher._authorize_agent(
+                analytics,
+                make_request("dame el reporte", agent_id="analytics", user_token="z" * 40),
+            )
 
-        assert resolved.agent_id == "ecommerce"
+        assert exc_info.value.status_code == 403
 
     @pytest.mark.asyncio
     async def test_non_analytics_agents_pass_through_untouched(self) -> None:
@@ -700,20 +709,33 @@ class TestDispatcherAuthorization:
         assert await dispatcher._authorize_agent(ecommerce, make_request("precio del curso")) is ecommerce
 
     @pytest.mark.asyncio
-    async def test_downgraded_agent_does_not_declare_the_sql_console(self) -> None:
+    async def test_rejected_request_never_reaches_any_agents_process(self) -> None:
         """Protects the composition of layers 0 and 1.
 
-        A downgrade that landed on an agent which still exposed the console would move
-        the vulnerability rather than close it.
+        Previously an unauthorized analytics request was silently downgraded and re-run
+        on `EcommerceAgent.process()`, which would move the vulnerability rather than
+        close it (a different agent, but still an agent producing a 200). Now
+        `_authorize_agent` raises before any agent's `process`/`process_stream` is
+        invoked at all — proven here by patching `EcommerceAgent.process` with a spy
+        that must never be called.
         """
         _auth_status_var.set(None)
         dispatcher, analytics = self._dispatcher_with(ANONYMOUS)
         request = make_request("dame el reporte con SELECT * FROM auth_user", agent_id="analytics")
 
-        resolved = await dispatcher._authorize_agent(analytics, request)
-        names = {d["name"] for d in resolved.get_tool_declarations(request)}
+        ecommerce = dispatcher.get("ecommerce")
+        process_calls: list[Any] = []
 
-        assert SQL_SANDBOX_TOOL_NAME not in names
+        async def spy_process(req: ChatRequest) -> Any:
+            process_calls.append(req)
+            raise AssertionError("EcommerceAgent.process must never run for a rejected analytics request")
+
+        ecommerce.process = spy_process  # type: ignore[assignment]
+
+        with pytest.raises(AgentAuthorizationError):
+            await dispatcher.dispatch(request)
+
+        assert process_calls == []
 
 
 # ==============================================================================
@@ -902,14 +924,14 @@ class TestDevelopmentEscapeHatch:
         assert sandbox_calls == []
 
     @pytest.mark.asyncio
-    async def test_dev_identity_is_still_downgraded_by_the_dispatcher(
+    async def test_dev_identity_is_still_rejected_by_the_dispatcher(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Protects layer 0 against the dev identity being mistaken for authorization.
 
         Previously broken for the same `role`-defaulting reason as the test above: the
         dispatcher promoted the roleless dev identity to "analyst" and handed over the
-        analytics agent instead of downgrading.
+        analytics agent instead of rejecting it.
         """
         self._enable_dev_mode(monkeypatch)
         _auth_status_var.set(None)
@@ -918,11 +940,12 @@ class TestDevelopmentEscapeHatch:
         analytics = dispatcher.get("analytics")
         analytics.django_service = DjangoAPIService(base_url="http://127.0.0.1:9")
 
-        resolved = await dispatcher._authorize_agent(
-            analytics, make_request("dame el reporte", agent_id="analytics", user_token="z" * 40)
-        )
+        with pytest.raises(AgentAuthorizationError) as exc_info:
+            await dispatcher._authorize_agent(
+                analytics, make_request("dame el reporte", agent_id="analytics", user_token="z" * 40)
+            )
 
-        assert resolved.agent_id == "ecommerce"
+        assert exc_info.value.status_code == 403
 
     @pytest.mark.parametrize(
         "environment,debug",
@@ -1120,8 +1143,8 @@ class TestProductionShapedCustomerCannotReachSql:
         assert '"blocked": true' in augmentation.lower()
 
     @pytest.mark.asyncio
-    async def test_production_customer_is_downgraded(self) -> None:
-        """REGRESSION: layer 0 must downgrade the same identity."""
+    async def test_production_customer_is_rejected(self) -> None:
+        """REGRESSION: layer 0 must explicitly reject the same identity."""
         _auth_status_var.set(None)
         dispatcher = AgentDispatcher(auto_register=True)
         analytics = dispatcher.get("analytics")
@@ -1132,11 +1155,12 @@ class TestProductionShapedCustomerCannotReachSql:
 
         analytics.django_service = Validator()
 
-        resolved = await dispatcher._authorize_agent(
-            analytics, make_request("dame el reporte", agent_id="analytics", user_token="customer-jwt")
-        )
+        with pytest.raises(AgentAuthorizationError) as exc_info:
+            await dispatcher._authorize_agent(
+                analytics, make_request("dame el reporte", agent_id="analytics", user_token="customer-jwt")
+            )
 
-        assert resolved.agent_id == "ecommerce"
+        assert exc_info.value.status_code == 403
 
     @pytest.mark.asyncio
     async def test_production_customer_does_not_unlock_the_sql_schema(self) -> None:

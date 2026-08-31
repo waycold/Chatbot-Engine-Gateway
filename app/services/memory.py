@@ -138,6 +138,7 @@ class RedisMemoryService:
         session_id: str,
         role: str,
         content: str,
+        agent_id: Optional[str] = None,
         ttl: Optional[int] = None,
     ) -> None:
         """Appends a new turn message to the session's conversation history.
@@ -146,11 +147,16 @@ class RedisMemoryService:
             session_id: Session identifier.
             role: Message role ('user', 'model', or 'system').
             content: Text content of the message.
+            agent_id: Identifier of the agent that produced/received this turn, used to
+                namespace history so one agent never replays another agent's turns as
+                its own when a `session_id` is reused across agents. `None` (the
+                default) marks legacy messages saved before this field existed.
             ttl: Key expiration time in seconds (defaults to settings.SESSION_TTL_SECONDS).
         """
         item = {
             "role": role,
             "content": content,
+            "agent_id": agent_id,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
