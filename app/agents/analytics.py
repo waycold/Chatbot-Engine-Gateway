@@ -87,6 +87,21 @@ class AnalyticsAgent(BaseAgent):
     and safe SQL sandbox with token-based access validation.
     """
 
+    # Guardrail appended to the ungrounded fallback turn only (see
+    # `BaseAgent._guard_no_tools_system_instruction`). Written in this agent's own
+    # metrics/KPI vocabulary -- the shared, ecommerce-flavored guardrail text this used
+    # to inherit (stock/price/availability) never made sense for a query about revenue
+    # or margins in the first place.
+    NO_TOOLS_GUARDRAIL_TEXT = (
+        "\n\n[Tool availability notice]: this turn has NO access to any real-time "
+        "analytics tool (sales, margins, inventory, segmentation, funnel/cart, reviews, "
+        "or SQL). Do NOT state or invent metrics, KPIs, rankings, or numbers of any kind "
+        "from your own training data. If the user's question depends on live business "
+        "data, state only that you cannot verify it right now and ask them to retry "
+        "shortly. You may still answer parts of the query that do not depend on "
+        "real-time data."
+    )
+
     def __init__(
         self,
         agent_id: str = "analytics",
@@ -278,7 +293,17 @@ class AnalyticsAgent(BaseAgent):
             "3. For SQL sandbox queries, display tabular results and clarify that operations run in read-only security mode.\n"
             "4. If data indicates the user token is invalid or authentication is missing for restricted metrics, "
             "politely explain that a valid JWT token with analytics privileges is required.\n"
-            "5. Be rigorous, objective, and accurate: do not invent numbers outside the data provided in context.\n"
+            "5. Be rigorous, objective, and accurate: never invent numbers outside the data actually "
+            "returned by a tool. However, 'not inventing numbers' does NOT mean 'stop at the first "
+            "pre-loaded context block'. If the pre-loaded context does not contain the specific "
+            "ranking, breakdown, or metric the user asked for (e.g. a per-product 'best sellers' "
+            "ranking, or a metric the general overview does not break down), but you have a declared "
+            "tool that could retrieve it (get_product_profitability, query_sales_analytics, "
+            "get_inventory_health, get_funnel_and_cart_metrics, get_customer_segmentation, "
+            "get_customer_reviews_summary, or the SQL sandbox when available), you MUST call that "
+            "tool before concluding the data is unavailable. Only state that data is 'not available' "
+            "AFTER a relevant tool call has actually failed or returned empty — never merely because "
+            "the pre-loaded context did not already contain it.\n"
             "6. IMPORTANT: When the user specifies a time period (month, quarter, year, date range), "
             "the data you present MUST correspond EXCLUSIVELY to that period — never to the general historical accumulated total. "
             "If the data context shows 'date_from' and 'date_to', those are the boundaries of the analysis. "
@@ -425,11 +450,28 @@ class AnalyticsAgent(BaseAgent):
                 context_data["tool_invoked"] = "query_sales_analytics"
                 context_data["sales_analytics"] = sales_res
 
-            # 8. General KPI Overview fallback
+            # 8. General KPI Overview fallback -- this branch is a catch-all: it does NOT
+            # try to match the user's specific ask, it just returns a generic 30-day
+            # snapshot so the turn always has *some* grounding data. Because that data
+            # then appears in the prompt as "[Context / Grounding Data]" (see
+            # `build_conversation_contents`), it can look to the model like the question
+            # was already answered. The `_hint` field makes explicit that this is only a
+            # tentative, generic overview -- not the specific ranking/breakdown the user
+            # may have asked for -- and that a matching tool should still be called
+            # directly if so. See Rule 5 in `get_system_instruction` above for the
+            # matching instruction on the model side.
             else:
                 analytics_data = await self.django_service.query_analytics(metric_type="all", timeframe="30d", user_token=user_token)
                 context_data["tool_invoked"] = "query_analytics"
                 context_data["general_metrics"] = analytics_data
+                context_data["_hint"] = (
+                    "This is a generic 30-day KPI overview, NOT a specific ranking or breakdown. "
+                    "If the user asked for a ranking, breakdown, or top-N list (e.g. best-selling "
+                    "products, top categories, margin ranking), this overview does NOT contain it — "
+                    "call the matching tool directly (get_product_profitability, "
+                    "query_sales_analytics, get_inventory_health, get_funnel_and_cart_metrics, or "
+                    "get_customer_segmentation) before answering."
+                )
 
             return f"=== ANALYTICS & BI LIVE DATA ===\n{json.dumps(context_data, ensure_ascii=False, indent=2)}"
 
