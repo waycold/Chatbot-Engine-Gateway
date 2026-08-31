@@ -286,6 +286,32 @@ class AnalyticsAgent(BaseAgent):
             "7. DATA AVAILABILITY & ANTI-FABRICATION: If the data context indicates that the database or analytics service is unavailable, returned an error, or contains empty/missing data, you MUST state directly, concisely, and transparently that you currently do not have the required data to answer the inquiry. DO NOT fabricate numbers, mock inventory/products, or generate executive summaries and recommendations for non-existent or inaccessible data."
         )
 
+    def get_strong_tool_hint(self, request: ChatRequest) -> Optional[str]:
+        """Consults the dispatcher's `STRONG_TOOL_HINTS` for a high-confidence tool
+        suggestion for this turn's message (e.g. "best-selling products" / "más
+        vendidos" -> `get_product_profitability`).
+
+        This is purely additive and intentionally NOT wired into
+        `get_context_augmentation`'s existing branch chain — it is a hook for future
+        work (e.g. a hallucination-guardrail pass) that wants a pre-model signal for
+        which tool a phrase is most likely asking for, without reworking the current
+        context-augmentation branches or system instruction. It never calls a tool
+        itself, and it does not gate or replace Gemini's own function-calling inside
+        `run_tool_loop`.
+
+        Args:
+            request: The incoming chat request.
+
+        Returns:
+            The hinted tool name (e.g. "get_product_profitability"), or None when no
+            `STRONG_TOOL_HINTS` pattern matches.
+        """
+        # Imported lazily: `dispatcher` imports `AnalyticsAgent` from this module at
+        # module-load time, so importing back at module scope here would be circular.
+        from app.agents.dispatcher import get_strong_tool_hint as _get_strong_tool_hint
+
+        return _get_strong_tool_hint(request.message)
+
     async def get_context_augmentation(self, request: ChatRequest) -> Optional[str]:
         """Validates token and queries analytical tools from Django backend based on query intent."""
         user_token = request.user_token

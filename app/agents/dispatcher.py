@@ -1,6 +1,7 @@
 """Agent Dispatcher and Intent Orchestrator."""
 import inspect
 import logging
+import re
 from typing import Any, AsyncGenerator, Optional
 from app.agents.analytics import AnalyticsAgent, _is_staff, set_auth_status
 from app.agents.base import BaseAgent, EventSink
@@ -10,6 +11,102 @@ from app.agents.portfolio import PortfolioAgent
 from app.schemas.payload import AgentInfo, ChatRequest, ChatResponse
 
 logger = logging.getLogger("ai_gateway.dispatcher")
+
+
+# --- Intent classification keyword sets --------------------------------------------
+#
+# E-Commerce signals: catalog, pricing, purchase, shipping/stock inquiries.
+ECOMMERCE_KEYWORDS: list[str] = [
+    "producto", "productos", "comprar", "precio", "precios", "catálogo", "catalogo",
+    "curso", "cursos", "stock", "cuanto cuesta", "cuánto cuesta", "costo", "costos",
+    "tienda", "order", "buy", "price", "shop", "adquirir", "contratar servicio",
+]
+
+# Analytics signals: KPIs, sales/revenue, margins, rankings, funnels, segmentation.
+ANALYTICS_KEYWORDS: list[str] = [
+    "métrica", "metrica", "métricas", "metricas", "kpi", "kpis", "analítica", "analitica",
+    "estadística", "estadisticas", "estadísticas", "ventas del mes", "conversión",
+    "conversion", "tráfico", "trafico", "rendimiento", "analytics", "dashboard", "reporte",
+    "revenue", "usuarios activos",
+    # EN/ES terms for "best-selling" / ranking / margin phrasing that were previously
+    # missing, causing these queries to fall through to "ecommerce" or "portfolio"
+    # instead of "analytics" (diagnostico-plan-agentes-multi-agente.md, causa raíz A2/A3).
+    "best-selling", "best seller", "best sellers", "bestseller", "bestsellers",
+    "top selling", "top-selling", "top sales", "top products", "most sold",
+    "highest revenue", "sales ranking", "product ranking",
+    "rentabilidad", "márgenes", "margenes", "margen",
+    "más vendido", "más vendidos", "mas vendido", "mas vendidos",
+    "mejor vendido", "mejores vendidos", "ranking de productos",
+    "embudo", "segmentación", "segmentacion", "trending",
+    # Bare EN/ES domain terms already recognized as analytics triggers by
+    # AnalyticsAgent.get_context_augmentation's own branch matching (analytics.py,
+    # margins/customer-segmentation/sales branches) but previously absent from the
+    # dispatcher's own keyword list, so a query using only these words (e.g. "margin
+    # by category", "customer RFM") never reached the analytics agent in the first
+    # place — closing this gap is a direct extension of the same causa raíz (A2/A3).
+    # Deliberately NOT adding bare "customer"/"customers": those are too generic and
+    # would tie with (or lose to) plain ecommerce/support phrasing like "I'm a
+    # customer, where is my order?" — "rfm" alone already routes the canonical
+    # "customer RFM" test case correctly without that false-positive risk.
+    "margin", "margins", "rfm",
+    "venta", "ventas", "vendido", "vendidos",
+]
+
+# High-confidence intent -> tool hints. This reinforces (never replaces) Gemini's own
+# function-calling: `run_tool_loop` still receives the full ANALYTICS_TOOL_DECLARATIONS
+# and decides for itself which tool(s) to call for a given turn. These hints exist so a
+# caller that wants a low-latency, pre-model signal (e.g. AnalyticsAgent, or
+# logging/telemetry) can know which tool a phrase is most likely asking for, without
+# waiting on an LLM round trip. Patterns are matched case-insensitively against the raw
+# message via `get_strong_tool_hint`.
+STRONG_TOOL_HINTS: dict[str, str] = {
+    r'\bbest[- ]?sell(ing|er)': "get_product_profitability",
+    r'\bmás vendid': "get_product_profitability",
+    r'\bmas vendid': "get_product_profitability",
+    r'\btop\s+\d*\s*produc': "get_product_profitability",
+}
+
+
+def _matches_any(msg_lower: str, keywords: list[str]) -> bool:
+    """Whole-word/phrase match: True if any keyword occurs in `msg_lower` bounded by
+    word edges (`\\b`), never as a bare substring.
+
+    This is what prevents false positives like "recurso" matching the "curso"
+    ecommerce keyword — `\\bcurso\\b` does not match inside "recurso" because there is
+    no word boundary between "re" and "curso".
+
+    Args:
+        msg_lower: The already-lowercased message to search.
+        keywords: Candidate keywords/phrases to look for.
+
+    Returns:
+        True if any keyword matches as a whole word/phrase.
+    """
+    return any(re.search(rf'\b{re.escape(kw)}\b', msg_lower) for kw in keywords)
+
+
+def get_strong_tool_hint(message: str) -> Optional[str]:
+    """Returns the high-confidence tool name for a message, if any `STRONG_TOOL_HINTS`
+    pattern matches.
+
+    This is a reinforcement signal, not a routing decision or a tool-execution
+    shortcut: it never calls a tool itself, and it does not gate or replace Gemini's
+    function-calling inside `run_tool_loop`. It exists as a hook that `AnalyticsAgent`
+    (or its context-augmentation logic) can consult when it wants a fast, pre-model
+    guess at which tool a phrase is asking for — e.g. to bias a pre-fetch or to log
+    routing confidence — without reworking the existing tool-selection logic.
+
+    Args:
+        message: The raw user message (case handled internally).
+
+    Returns:
+        The hinted tool name, or None when no pattern matches.
+    """
+    msg_lower = message.lower()
+    for pattern, tool_name in STRONG_TOOL_HINTS.items():
+        if re.search(pattern, msg_lower):
+            return tool_name
+    return None
 
 
 class AgentDispatcher:
@@ -47,29 +144,36 @@ class AgentDispatcher:
     def classify_intent(self, message: str) -> str:
         """Heuristic and keyword-based intent classifier for automatic routing.
 
-        Routes message to 'portfolio', 'ecommerce', or 'analytics'.
-        Defaults to 'portfolio' for general greeting/profile inquiries.
+        Routes message to 'portfolio', 'ecommerce', or 'analytics' using weighted
+        keyword scoring with word-boundary matching (`_matches_any`) instead of naive
+        substring containment — the previous `kw in msg_lower` check produced false
+        positives such as "recurso" matching the "curso" ecommerce keyword.
+
+        Scoring, not binary precedence: both keyword lists are always evaluated, and
+        analytics wins whenever it has at least one hit and its hit count is greater
+        than or equal to ecommerce's. This fixes messages with strong analytical
+        signal that also contain a generic catalog word — e.g. "revenue de mis
+        productos" previously matched "productos" first and returned early as
+        "ecommerce", ignoring the explicit "revenue" signal. Ecommerce only wins when
+        it has hits and analytics does not have an equal-or-greater count.
+
+        This is a low-latency hint for the first-render UX and does not decide which
+        tool actually executes — that remains Gemini's function-calling job inside
+        `run_tool_loop`, optionally reinforced by `STRONG_TOOL_HINTS` /
+        `get_strong_tool_hint`.
+
+        Defaults to 'portfolio' for general greeting/profile inquiries with no hits
+        in either list.
         """
         msg_lower = message.lower().strip()
 
-        # E-Commerce signals
-        ecommerce_keywords = [
-            "producto", "productos", "comprar", "precio", "precios", "catálogo", "catalogo",
-            "curso", "cursos", "stock", "cuanto cuesta", "cuánto cuesta", "costo", "costos",
-            "tienda", "order", "buy", "price", "shop", "adquirir", "contratar servicio",
-        ]
-        if any(kw in msg_lower for kw in ecommerce_keywords):
-            return "ecommerce"
+        ecommerce_hits = sum(1 for kw in ECOMMERCE_KEYWORDS if _matches_any(msg_lower, [kw]))
+        analytics_hits = sum(1 for kw in ANALYTICS_KEYWORDS if _matches_any(msg_lower, [kw]))
 
-        # Analytics signals
-        analytics_keywords = [
-            "métrica", "metrica", "métricas", "metricas", "kpi", "kpis", "analítica", "analitica",
-            "estadística", "estadisticas", "estadísticas", "ventas del mes", "conversión",
-            "conversion", "tráfico", "trafico", "rendimiento", "analytics", "dashboard", "reporte",
-            "revenue", "usuarios activos",
-        ]
-        if any(kw in msg_lower for kw in analytics_keywords):
+        if analytics_hits > 0 and analytics_hits >= ecommerce_hits:
             return "analytics"
+        if ecommerce_hits > 0:
+            return "ecommerce"
 
         # Default to portfolio
         return "portfolio"
