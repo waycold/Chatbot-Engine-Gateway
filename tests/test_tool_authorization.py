@@ -253,6 +253,33 @@ class TestExecuteToolAllowlist:
         assert result["status"] == "error"
         assert invocations == []
 
+    @pytest.mark.asyncio
+    async def test_ecommerce_cannot_execute_query_sales_analytics(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Protects layer 2 for the OTHER privileged analytics tool, not just SQL.
+
+        `query_sales_analytics` is a read-only aggregation endpoint, not the raw SQL
+        console, but it is still an analytics-only tool that must never be reachable
+        through the e-commerce agent's allowlist. As above, the real service method is
+        replaced with a tripwire so a false pass (blocked flag set but the call still
+        went through) cannot slip by.
+        """
+        async def tripwire(self: Any, *args: Any, **kwargs: Any) -> dict[str, Any]:
+            raise AssertionError("SECURITY: query_sales_analytics was dispatched despite the allowlist")
+
+        monkeypatch.setattr(DjangoAPIService, "query_sales_analytics", tripwire)
+
+        allowed = await EcommerceAgent().get_allowed_tool_names(make_request("dame las ventas por categoría"))
+        assert "query_sales_analytics" not in allowed
+
+        result = await execute_tool(
+            "query_sales_analytics", {"dimension": "category"}, allowed_tools=allowed,
+        )
+
+        assert result["blocked"] is True
+        assert result["status"] == "error"
+
     @pytest.mark.parametrize("message", ADVERSARIAL_MESSAGES)
     @pytest.mark.asyncio
     async def test_injected_sql_tool_name_cannot_execute_for_any_message(
