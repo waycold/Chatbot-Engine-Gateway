@@ -10,11 +10,12 @@ Analytics test cases and five Ecommerce test cases specified verbatim in the dia
 regressions the diagnostic verified by hand (causa raíz A3: "recurso" false-matching
 "curso", and "revenue de mis productos" losing to ecommerce-first precedence).
 
-This file does not touch production code. Where a parametrized case from the diagnostic
-does NOT route the way the diagnostic assumed, it is captured as an `xfail` with a
-precise citation rather than silently adjusted to match current behavior -- see
-`TestClassifyIntentEcommerceRouting.test_shipping_only_phrasing_currently_misroutes`
-below and the "bug real" note in this session's final report.
+Subagente 4 also found that shipping-only phrasing ("Dónde envían?", "Where do you
+ship?") fell through to the "portfolio" default because ECOMMERCE_KEYWORDS had no
+shipping/delivery term in either language. That gap was closed directly (shipping
+terms added to ECOMMERCE_KEYWORDS in dispatcher.py) rather than left as a follow-up,
+so `test_shipping_only_phrasing_currently_misroutes` below asserts the fixed, correct
+routing instead of being an `xfail`.
 """
 from typing import Optional
 import pytest
@@ -97,22 +98,11 @@ class TestClassifyIntentEcommerceRouting:
             "Where do you ship?",
         ],
     )
-    @pytest.mark.xfail(
-        reason=(
-            "BUG (found by Subagente 4, not fixed here per task scope -- test-only "
-            "changes): ECOMMERCE_KEYWORDS in app/agents/dispatcher.py:19-23 has no "
-            "shipping/delivery term in either language (no 'envío'/'envíos'/'shipping'/"
-            "'ship'/'delivery'/'entrega'). A pure shipping question with no price or "
-            "stock word in it scores 0-0 and falls through to the 'portfolio' default "
-            "instead of 'ecommerce'. This is exactly the 'envíos' case the diagnostic's "
-            "Subagente 4 section listed as an example that 'debe rutear correctamente'; "
-            "it currently does not. 'cuánto cuesta el envío' still routes correctly "
-            "because it also contains the 'cuánto cuesta' keyword -- the gap is "
-            "shipping-only phrasing."
-        ),
-        strict=True,
-    )
     def test_shipping_only_phrasing_currently_misroutes(self, dispatcher: AgentDispatcher, message: str) -> None:
+        """Regression test for the gap Subagente 4 found: shipping-only phrasing with no
+        price/stock word previously scored 0-0 and fell through to "portfolio". Fixed by
+        adding shipping/delivery terms (EN/ES) to ECOMMERCE_KEYWORDS in dispatcher.py.
+        """
         assert dispatcher.classify_intent(message) == "ecommerce"
 
     def test_shipping_question_with_a_price_word_still_routes_to_ecommerce(

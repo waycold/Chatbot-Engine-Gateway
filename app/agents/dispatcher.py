@@ -20,6 +20,12 @@ ECOMMERCE_KEYWORDS: list[str] = [
     "producto", "productos", "comprar", "precio", "precios", "catálogo", "catalogo",
     "curso", "cursos", "stock", "cuanto cuesta", "cuánto cuesta", "costo", "costos",
     "tienda", "order", "buy", "price", "shop", "adquirir", "contratar servicio",
+    # Shipping/delivery terms, EN/ES. A pure shipping question ("Where do you ship?",
+    # "Dónde envían?") previously had zero matches in this list, so it fell through to
+    # the "portfolio" default instead of "ecommerce" (found by Subagente 4, see
+    # diagnostico-plan-agentes-multi-agente.md, "Subagente 4" section).
+    "envío", "envio", "envíos", "envios", "envían", "envian", "envía", "envia", "enviar",
+    "shipping", "ship", "delivery", "entrega", "entregas",
 ]
 
 # Analytics signals: KPIs, sales/revenue, margins, rankings, funnels, segmentation.
