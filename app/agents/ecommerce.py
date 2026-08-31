@@ -3,7 +3,7 @@ import json
 import logging
 import re
 from typing import Any, AsyncGenerator, Optional
-from app.agents.base import BaseAgent, EventSink
+from app.agents.base import NO_TOOLS_HALLUCINATION_GUARDRAIL, BaseAgent, EventSink
 from app.agents.tools import CATALOG_RAG_TOOL_DECLARATIONS
 from app.core.config import settings
 from app.schemas.payload import ChatRequest, ChatResponse
@@ -31,6 +31,13 @@ class EcommerceAgent(BaseAgent):
 
     knowledge (shipping, refunds, financing, FAQs) with live database catalog grounding (products, prices, stock, reviews).
     """
+
+    # Guardrail appended to the ungrounded fallback turn only (see
+    # `BaseAgent._guard_no_tools_system_instruction`). This is the original, unchanged
+    # stock/price/availability/catalog guardrail text -- it was formerly applied
+    # unconditionally to every agent regardless of domain; it now lives here as this
+    # agent's own override.
+    NO_TOOLS_GUARDRAIL_TEXT = NO_TOOLS_HALLUCINATION_GUARDRAIL
 
     def __init__(
         self,

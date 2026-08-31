@@ -30,6 +30,12 @@ ANALYTICS_TOOL_DECLARATIONS = [
                     "type": "STRING",
                     "description": "Fecha de fin en formato YYYY-MM-DD (opcional)",
                 },
+                # TODO(hallazgo-D, diagnostico-plan-agentes-multi-agente.md): this enum has no
+                # "product" option, so no combination of tool calls can literally answer a
+                # "top N best-selling products" query (by units/revenue). Out of scope for this
+                # round -- do NOT add "product" here without confirming the Django backend
+                # endpoint actually supports a per-product breakdown. See the escalation ticket
+                # in the Subagente 3 report for the two options under evaluation.
                 "dimension": {
                     "type": "STRING",
                     "description": "Dimensión de agrupación: 'category', 'brand', 'supplier', 'payment_method', 'country', 'day', 'week', 'month', 'quarter'",
@@ -56,6 +62,11 @@ ANALYTICS_TOOL_DECLARATIONS = [
             },
         },
     },
+    # TODO(hallazgo-D, diagnostico-plan-agentes-multi-agente.md): this tool ranks by gross
+    # margin % only -- it has no `sort_by` to rank by units sold or revenue, so it cannot
+    # answer a literal "best sellers by units/revenue" question either. Out of scope for
+    # this round -- do NOT add a `sort_by` param here without backend coordination. See
+    # the escalation ticket in the Subagente 3 report for the two options under evaluation.
     {
         "name": "get_product_profitability",
         "description": "Calcula y consulta el ranking de rentabilidad y margen bruto % (((Ventas - Costos)/Ventas)*100) por producto o categoría. Acepta filtros de fecha para acotar el análisis a un periodo específico (mes, trimestre, año).",

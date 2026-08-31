@@ -58,6 +58,15 @@ CONTEXT_TRUNCATION_MARKER = "\n\n[...contexto truncado por límite de tamaño...
 # training data instead of admitting it cannot check. This block closes that gap the same
 # way the "Fase 5" degraded-search disclosure closes the analogous gap inside the loop
 # itself: an explicit, mandatory instruction placed right next to the point of failure.
+#
+# This specific text is written entirely in Ecommerce vocabulary (stock/price/
+# availability/catalog) because it was originally the only guardrail in the system and
+# got reused, unmodified, for every subclass. It is now `EcommerceAgent`'s own
+# `NO_TOOLS_GUARDRAIL_TEXT` override (see `ecommerce.py`) -- kept here as a module-level
+# constant, and its content is unchanged, purely so existing imports/tests that reference
+# `NO_TOOLS_HALLUCINATION_GUARDRAIL` directly keep working. Other agents must NOT read
+# this constant; they should set their own `NO_TOOLS_GUARDRAIL_TEXT` instead (see
+# `BaseAgent.NO_TOOLS_GUARDRAIL_TEXT` below).
 NO_TOOLS_HALLUCINATION_GUARDRAIL = (
     "\n\n[Aviso de disponibilidad de herramientas]: en este turno NO tienes acceso a "
     "ninguna herramienta de verificación en tiempo real (stock, precio, disponibilidad "
@@ -119,6 +128,18 @@ class BaseAgent(ABC):
     Provides common plumbing for memory retrieval, system prompt formatting,
     context grounding, LLM invocation (streaming & non-streaming), and memory persistence.
     """
+
+    # Overridable per subclass. Appended to the system instruction ONLY for the
+    # ungrounded fallback turn (see `_guard_no_tools_system_instruction`) -- the plain
+    # `generate_content` / `generate_content_stream` call `_execute_process` /
+    # `_execute_process_stream` make when `run_tool_loop` gives up and returns "". Each
+    # subclass that declares tools should set this to a guardrail written in ITS OWN
+    # domain vocabulary (e.g. stock/price for Ecommerce, KPIs/metrics for Analytics) --
+    # a single shared, ecommerce-flavored text applied to every agent regardless of
+    # domain was the original bug this attribute fixes. `None` (the default) disables
+    # the fallback guardrail entirely, which is correct for agents like `PortfolioAgent`
+    # that declare no tools and never ground facts via tool calls in the first place.
+    NO_TOOLS_GUARDRAIL_TEXT: Optional[str] = None
 
     def __init__(
         self,
@@ -478,15 +499,19 @@ class BaseAgent(ABC):
         either because the loop's own provider call raised (see the `except` block at
         the end of `run_tool_loop`) or because tool calling is disabled/unavailable this
         turn. That fallback call has zero grounding, so nothing stops the model from
-        answering a stock/price/availability question straight out of its training data
-        instead of admitting it cannot check right now. This method closes that gap by
-        appending `NO_TOOLS_HALLUCINATION_GUARDRAIL` to the system instruction for that
-        one call only.
+        answering a domain question (stock/price for Ecommerce, a KPI/metric for
+        Analytics, etc.) straight out of its training data instead of admitting it
+        cannot check right now. This method closes that gap by appending this
+        subclass's own `self.NO_TOOLS_GUARDRAIL_TEXT` to the system instruction for that
+        one call only -- each agent is responsible for phrasing that text in its own
+        domain vocabulary; see `EcommerceAgent.NO_TOOLS_GUARDRAIL_TEXT` and
+        `AnalyticsAgent.NO_TOOLS_GUARDRAIL_TEXT`.
 
         Agents that never declare tools (e.g. `PortfolioAgent`) never ground facts via
         tool calls in the first place, so their fallback is not a degraded path and must
         not pay this cost or change behavior -- hence the no-op when `declarations` is
-        empty.
+        empty. Same no-op, for the same reason, when a subclass leaves
+        `NO_TOOLS_GUARDRAIL_TEXT` at its default `None`.
 
         Args:
             system_instruction: The agent's system prompt for this turn.
@@ -494,12 +519,13 @@ class BaseAgent(ABC):
                 `get_tool_declarations`).
 
         Returns:
-            `system_instruction` unchanged when `declarations` is empty, otherwise
-            `system_instruction` with the guardrail text appended.
+            `system_instruction` unchanged when `declarations` is empty or this
+            subclass declares no guardrail text, otherwise `system_instruction` with
+            `self.NO_TOOLS_GUARDRAIL_TEXT` appended.
         """
-        if not declarations:
+        if not declarations or not self.NO_TOOLS_GUARDRAIL_TEXT:
             return system_instruction
-        return system_instruction + NO_TOOLS_HALLUCINATION_GUARDRAIL
+        return system_instruction + self.NO_TOOLS_GUARDRAIL_TEXT
 
     # Exposed on the class as well as at module level so the SDK-primary branch can be
     # exercised in isolation from either entry point. Same function, same signature.
